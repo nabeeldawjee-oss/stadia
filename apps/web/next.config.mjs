@@ -1,7 +1,6 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  transpilePackages: ["@tournify/types", "@tournify/utils"],
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  transpilePackages: ["@stadia/types", "@stadia/utils"],
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "*.r2.cloudflarestorage.com" },
