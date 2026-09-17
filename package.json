@@ -1,0 +1,24 @@
+{
+  "name": "stadia",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "db:migrate": "pnpm --filter @stadia/db exec prisma migrate dev",
+    "db:generate": "pnpm --filter @stadia/db exec prisma generate",
+    "db:studio": "pnpm --filter @stadia/db exec prisma studio",
+    "db:push": "pnpm --filter @stadia/db exec prisma db push",
+    "db:seed": "pnpm --filter @stadia/db exec ts-node prisma/seed.ts"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0",
+    "typescript": "^5.6.0",
+    "prettier": "^3.3.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.12.0"
+}
