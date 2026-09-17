@@ -52,9 +52,11 @@ async function bootstrap() {
   // Make io accessible in routes via app.io
   app.decorate("io", io);
 
-  // Subscribe to Redis pub/sub and broadcast to Socket.io rooms
+  // Subscribe to Redis pub/sub and broadcast to Socket.io rooms (non-blocking)
   const sub = redis.duplicate();
-  await sub.subscribe("score-updated", "standings-updated", "bracket-updated");
+  sub.subscribe("score-updated", "standings-updated", "bracket-updated").catch((err) =>
+    logger.error({ err }, "Redis pubsub subscribe failed")
+  );
   sub.on("message", (channel, message) => {
     try {
       const payload = JSON.parse(message);
@@ -74,7 +76,6 @@ async function bootstrap() {
   await app.register(rateLimit, {
     max: 200,
     timeWindow: "1 minute",
-    redis,
     keyGenerator: (req) => req.ip,
   });
 
