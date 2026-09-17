@@ -10,7 +10,7 @@ const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
 interface FieldDef { id: string; label: string; type: string; required: boolean; options?: string[]; }
 interface AddOn { id: string; label: string; price: number; }
 interface RegSchema { fields: FieldDef[]; addOns: AddOn[]; entryFee: number; currency: string; maxTeams: number | null; }
-interface Props { slug: string; }
+interface Props { slug: string; schema: RegSchema; }
 
 function RegistrationFormInner({ slug, schema }: { slug: string; schema: RegSchema }) {
   const stripe = useStripe();
