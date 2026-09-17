@@ -49,6 +49,12 @@ export interface TournamentSummary {
   teamCount: number;
 }
 
+export interface BrandingConfig {
+  primaryColor?: string;
+  logoUrl?: string;
+  bannerUrl?: string;
+}
+
 export interface TournamentDetail extends TournamentSummary {
   divisions: DivisionSummary[];
   teams: TeamSummary[];
