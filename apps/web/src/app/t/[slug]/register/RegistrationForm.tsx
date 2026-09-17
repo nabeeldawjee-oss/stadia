@@ -1,7 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
 import { apiFetch, api } from "@/lib/api";
-import useSWR from "swr";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
@@ -170,15 +169,7 @@ function RegistrationFormInner({ slug, schema }: { slug: string; schema: RegSche
   );
 }
 
-export default function RegistrationForm({ slug }: Props) {
-  const { data: schema, isLoading, error } = useSWR<RegSchema>(
-    `/api/public/t/${slug}/register`,
-    () => apiFetch(`/api/public/t/${slug}/register`)
-  );
-
-  if (isLoading) return <div className="text-gray-400 text-sm">Loading form...</div>;
-  if (error || !schema) return <div className="text-red-500 text-sm">Registration is not available for this tournament.</div>;
-
+export default function RegistrationForm({ slug, schema }: Props) {
   const inner = <RegistrationFormInner slug={slug} schema={schema} />;
 
   if (schema.entryFee > 0) {
