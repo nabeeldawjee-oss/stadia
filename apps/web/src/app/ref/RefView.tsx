@@ -4,7 +4,7 @@ import useSWR from "swr";
 import { useState } from "react";
 import { apiFetch } from "@/lib/api";
 import ScoreEntryModal from "@/components/ScoreEntryModal";
-import { Whistle } from "lucide-react";
+
 
 interface Team { id: string; name: string; }
 interface Match { id: string; homeTeam: Team | null; awayTeam: Team | null; homeScore: number | null; awayScore: number | null; status: string; scheduledMatch?: { startTime: string; field: { name: string } } | null; }
