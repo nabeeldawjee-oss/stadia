@@ -1,4 +1,5 @@
 {
+  "framework": "nextjs",
   "installCommand": "cd ../.. && pnpm install --no-frozen-lockfile",
   "buildCommand": "cd ../.. && pnpm --filter @stadia/db db:generate && pnpm --filter @stadia/db build && pnpm --filter @stadia/web build",
   "outputDirectory": ".next"
