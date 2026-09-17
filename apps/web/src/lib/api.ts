@@ -24,10 +24,10 @@ export async function apiFetch<T>(
 }
 
 export const api = {
-  get: <T>(path: string) => apiFetch<T>(path),
-  post: <T>(path: string, body: unknown) =>
+  get: <T = any>(path: string): Promise<T> => apiFetch<T>(path),
+  post: <T = any>(path: string, body: unknown): Promise<T> =>
     apiFetch<T>(path, { method: "POST", body: JSON.stringify(body) }),
-  put: <T>(path: string, body: unknown) =>
+  put: <T = any>(path: string, body: unknown): Promise<T> =>
     apiFetch<T>(path, { method: "PUT", body: JSON.stringify(body) }),
-  delete: <T>(path: string) => apiFetch<T>(path, { method: "DELETE" }),
+  delete: <T = any>(path: string): Promise<T> => apiFetch<T>(path, { method: "DELETE" }),
 };
