@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "tsc",
+    "build": "tsup src/index.ts --format cjs --out-dir dist --no-splitting",
     "start": "node dist/index.js"
   },
   "dependencies": {
@@ -36,6 +36,7 @@
     "@types/node": "^22.0.0",
     "typescript": "^5.6.0",
     "ts-node-dev": "^2.0.0",
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.2",
+    "tsup": "^8.3.0"
   }
 }

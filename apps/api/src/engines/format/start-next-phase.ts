@@ -1,4 +1,4 @@
-import { prisma } from "@tournify/db";
+import { prisma } from "@stadia/db";
 
 export async function startNextPhase(currentPhaseId: string): Promise<void> {
   const currentPhase = await prisma.phase.findUnique({
