@@ -44,7 +44,7 @@ export async function autoSchedule(
   if (!unscheduledMatches.length) return { scheduled: 0, unscheduled: 0 };
 
   // Build slot grid
-  const startDt = new Date(`${body.matchDay}T${body.startTime}`);
+  const startDt = new Date(`${body.matchDay}T${body.startTime}:00Z`);
   const slotDuration = body.slotDurationMinutes;
   const restMinutes = body.restMinutesBetweenSameTeam || 0;
 

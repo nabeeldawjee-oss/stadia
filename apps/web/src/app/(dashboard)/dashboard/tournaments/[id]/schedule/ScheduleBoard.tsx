@@ -32,9 +32,9 @@ const TIME_SLOTS: Slot[] = Array.from({ length: 24 }, (_, i) => {
   return { time: `${String(h).padStart(2, "0")}:${m}`, label: `${hour}:${m} ${ampm}` };
 });
 
-function toLocalHHMM(iso: string): string {
+function toUTCHHMM(iso: string): string {
   const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
 }
 
 interface Props { tournamentId: string; }
@@ -68,7 +68,7 @@ export default function ScheduleBoard({ tournamentId }: Props) {
     try {
       await api.post(`/api/matches/${dragging.id}/schedule`, {
         fieldId,
-        startTime: new Date(`${date}T${slotTime}:00`).toISOString(),
+        startTime: new Date(`${date}T${slotTime}:00Z`).toISOString(),
       });
       await mutate();
     } finally {
@@ -155,7 +155,7 @@ export default function ScheduleBoard({ tournamentId }: Props) {
                 {fields.map((f) => {
                   const isTarget = saving === `${f.id}-${slot.time}`;
                   const scheduledHere = scheduled?.find(
-                    (s) => s.field.id === f.id && toLocalHHMM(s.startTime) === slot.time
+                    (s) => s.field.id === f.id && toUTCHHMM(s.startTime) === slot.time
                   );
                   return (
                     <div

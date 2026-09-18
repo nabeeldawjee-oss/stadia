@@ -38,7 +38,7 @@ interface ScheduledMatch {
 type View = "list" | "board" | "matrix";
 
 function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit", hour12: false });
+  return new Date(iso).toLocaleTimeString("en-ZA", { timeZone: "UTC", hour: "2-digit", minute: "2-digit", hour12: false });
 }
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" });
@@ -488,7 +488,7 @@ export default function SchedulePage() {
                   <div key={s.id} className="bg-white border border-gray-200 rounded-xl px-5 py-3 flex items-center gap-6">
                     <div className="flex items-center gap-1.5 text-sm text-gray-500 min-w-[80px]">
                       <Clock className="w-3.5 h-3.5" />
-                      {new Date(s.startTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                      {new Date(s.startTime).toLocaleTimeString("en-ZA", { timeZone: "UTC", hour: "2-digit", minute: "2-digit", hour12: false })}
                     </div>
                     <div className="flex items-center gap-1.5 text-xs text-gray-400">
                       <MapPin className="w-3 h-3" />
