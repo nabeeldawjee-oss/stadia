@@ -3,7 +3,6 @@ import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import { Server as SocketServer } from "socket.io";
-import { createServer } from "http";
 import { redis } from "./lib/redis";
 import { logger } from "./lib/logger";
 import { errorHandler } from "./middleware/error-handler";
@@ -33,39 +32,6 @@ declare module "fastify" {
 
 async function bootstrap() {
   const app = Fastify({ logger: false });
-  const httpServer = createServer(app.server as any);
-
-  // --- Socket.io ---
-  const io = new SocketServer(httpServer, {
-    cors: { origin: process.env.WEB_BASE_URL || "*", credentials: true },
-  });
-
-  io.on("connection", (socket) => {
-    socket.on("join:tournament", (tournamentId: string) => {
-      socket.join(`tournament:${tournamentId}`);
-    });
-    socket.on("leave:tournament", (tournamentId: string) => {
-      socket.leave(`tournament:${tournamentId}`);
-    });
-  });
-
-  // Make io accessible in routes via app.io
-  app.decorate("io", io);
-
-  // Subscribe to Redis pub/sub and broadcast to Socket.io rooms (non-blocking)
-  const sub = redis.duplicate();
-  sub.subscribe("score-updated", "standings-updated", "bracket-updated").catch((err) =>
-    logger.error({ err }, "Redis pubsub subscribe failed")
-  );
-  sub.on("message", (channel, message) => {
-    try {
-      const payload = JSON.parse(message);
-      const room = `tournament:${payload.tournamentId}`;
-      io.to(room).emit(channel, payload);
-    } catch {
-      // malformed message, ignore
-    }
-  });
 
   // --- Plugins ---
   await app.register(cors, {
@@ -103,10 +69,43 @@ async function bootstrap() {
   // --- Start ---
   const PORT = Number(process.env.PORT) || 4000;
 
-  // Use httpServer (not app.server) so Socket.io shares the same port
-  httpServer.listen(PORT, "0.0.0.0", () => {
-    logger.info(`API listening on http://0.0.0.0:${PORT}`);
+  // Fastify initialises its http.Server lazily — call ready() so app.server
+  // exists before Socket.io attaches to it.
+  await app.ready();
+
+  // Attach Socket.io to Fastify's own HTTP server so they share one port.
+  const io = new SocketServer(app.server, {
+    cors: { origin: process.env.WEB_BASE_URL || "*", credentials: true },
   });
+
+  io.on("connection", (socket) => {
+    socket.on("join:tournament", (tournamentId: string) => {
+      socket.join(`tournament:${tournamentId}`);
+    });
+    socket.on("leave:tournament", (tournamentId: string) => {
+      socket.leave(`tournament:${tournamentId}`);
+    });
+  });
+
+  app.decorate("io", io);
+
+  // Subscribe to Redis pub/sub and broadcast to Socket.io rooms (non-blocking)
+  const sub = redis.duplicate();
+  sub.subscribe("score-updated", "standings-updated", "bracket-updated").catch((err) =>
+    logger.error({ err }, "Redis pubsub subscribe failed")
+  );
+  sub.on("message", (channel, message) => {
+    try {
+      const payload = JSON.parse(message);
+      const room = `tournament:${payload.tournamentId}`;
+      io.to(room).emit(channel, payload);
+    } catch {
+      // malformed message, ignore
+    }
+  });
+
+  await app.listen({ port: PORT, host: "0.0.0.0" });
+  logger.info(`API listening on http://0.0.0.0:${PORT}`);
 
   // Graceful shutdown
   const shutdown = async () => {
