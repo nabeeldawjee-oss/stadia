@@ -112,7 +112,7 @@ export default function TeamsPage() {
   };
 
   const savePayment = async (id: string) => {
-    await api.patch(`/api/teams/${id}/payment`, {
+    await api.put(`/api/teams/${id}/payment`, {
       paymentStatus,
       paymentAmount: paymentAmount ? parseInt(paymentAmount, 10) : null,
     });
