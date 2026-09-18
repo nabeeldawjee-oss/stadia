@@ -33,10 +33,21 @@ declare module "fastify" {
 async function bootstrap() {
   const app = Fastify({ logger: false });
 
+  // Accept WEB_BASE_URL (comma-separated for multiple origins) plus the
+  // canonical production URL so a stale env var on Render never breaks CORS.
+  const allowedOrigins = [
+    ...(process.env.WEB_BASE_URL || "").split(",").map((s) => s.trim()).filter(Boolean),
+    "https://stadia-roxem.vercel.app",
+  ];
+  const corsOrigin = (origin: string | undefined, cb: (err: Error | null, allow: boolean) => void) => {
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(null, false);
+  };
+
   // app.server exists immediately after Fastify() — attach Socket.io and
   // decorate BEFORE any plugin registration so the lifecycle is respected.
   const io = new SocketServer(app.server, {
-    cors: { origin: process.env.WEB_BASE_URL || "*", credentials: true },
+    cors: { origin: corsOrigin, credentials: true },
   });
 
   io.on("connection", (socket) => {
@@ -67,7 +78,7 @@ async function bootstrap() {
 
   // --- Plugins ---
   await app.register(cors, {
-    origin: process.env.WEB_BASE_URL || "*",
+    origin: corsOrigin,
     credentials: true,
   });
   await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
