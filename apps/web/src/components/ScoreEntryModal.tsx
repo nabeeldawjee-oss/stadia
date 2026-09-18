@@ -18,11 +18,12 @@ interface Match {
 interface Props {
   match: Match;
   isOverride?: boolean;
+  token?: string;
   onClose: () => void;
   onSaved: () => void;
 }
 
-export default function ScoreEntryModal({ match, isOverride, onClose, onSaved }: Props) {
+export default function ScoreEntryModal({ match, isOverride, token, onClose, onSaved }: Props) {
   const [home, setHome] = useState("0");
   const [away, setAway] = useState("0");
   const [reason, setReason] = useState("");
@@ -64,7 +65,12 @@ export default function ScoreEntryModal({ match, isOverride, onClose, onSaved }:
     try {
       const payload: any = { homeScore, awayScore };
       if (stats.length > 0) payload.playerStats = stats.filter((s) => s.playerId || s.playerName);
-      if (isOverride) {
+      if (token) {
+        await apiFetch(`/api/scores?token=${encodeURIComponent(token)}`, {
+          method: "POST",
+          body: JSON.stringify({ matchId: match.id, ...payload }),
+        });
+      } else if (isOverride) {
         payload.reason = reason;
         await api.put(`/api/matches/${match.id}/score/override`, payload);
       } else {

@@ -83,7 +83,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
       },
       orderBy: { createdAt: "asc" },
     });
-    return reply.send(matches);
+    return reply.send({ success: true, data: matches });
   });
 
   // Quick schedule a match (drag-drop board)
@@ -102,7 +102,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
     const { tournamentId } = req.params as { tournamentId: string };
     await assertTournamentAccess(req.userId!, tournamentId, "view_only");
     const fields = await prisma.field.findMany({ where: { tournamentId }, orderBy: { orderIndex: "asc" } });
-    return reply.send(fields);
+    return reply.send({ success: true, data: fields });
   });
 
   app.post("/api/tournaments/:tournamentId/fields", { preHandler: authenticate }, async (req, reply) => {

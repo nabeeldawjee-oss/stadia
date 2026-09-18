@@ -26,7 +26,7 @@ const updateAdminSchema = z.object({
 async function assertOwner(userId: string, tournamentId: string) {
   const tournament = await prisma.tournament.findUnique({ where: { id: tournamentId } });
   if (!tournament) throw Object.assign(new Error("Tournament not found"), { statusCode: 404 });
-  if (tournament.ownerId !== userId) throw Object.assign(new Error("Owner access required"), { statusCode: 403 });
+  if (tournament.organizerId !== userId) throw Object.assign(new Error("Owner access required"), { statusCode: 403 });
 }
 
 export async function adminRoutes(app: FastifyInstance) {

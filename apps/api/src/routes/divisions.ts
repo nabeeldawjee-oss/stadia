@@ -201,7 +201,7 @@ export async function divisionRoutes(app: FastifyInstance) {
       },
     });
     const phases = divisions.flatMap((d) => d.phases.map((p) => ({ ...p, divisionName: d.name })));
-    return reply.send(phases);
+    return reply.send({ success: true, data: phases });
   });
 
   // Get bracket tree

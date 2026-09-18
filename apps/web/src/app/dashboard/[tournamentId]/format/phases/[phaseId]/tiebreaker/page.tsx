@@ -59,7 +59,7 @@ export default function TiebreakerPage() {
     if (!selectedGroupId) return;
     setSaving(true);
     try {
-      await api.put(`/api/groups/${selectedGroupId}/tiebreaker`, { tiebreakerChain: chain });
+      await api.put(`/api/groups/${selectedGroupId}/tiebreaker`, { chain });
       setSaved(true);
     } finally {
       setSaving(false);

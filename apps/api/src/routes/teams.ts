@@ -60,6 +60,16 @@ export async function teamRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: null });
   });
 
+  // List players
+  app.get("/api/teams/:teamId/players", { preHandler: authenticate }, async (req, reply) => {
+    const { teamId } = req.params as { teamId: string };
+    const team = await prisma.team.findUnique({ where: { id: teamId } });
+    if (!team) return reply.code(404).send({ success: false, error: "Not found" });
+    await assertTournamentAccess(req.userId!, team.tournamentId, "view_only");
+    const players = await prisma.player.findMany({ where: { teamId }, orderBy: { number: "asc" } });
+    return reply.send({ success: true, data: players });
+  });
+
   // Add player
   app.post("/api/teams/:teamId/players", { preHandler: authenticate }, async (req, reply) => {
     const { teamId } = req.params as { teamId: string };
