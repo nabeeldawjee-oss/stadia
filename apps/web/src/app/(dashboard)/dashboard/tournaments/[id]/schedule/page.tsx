@@ -1,6 +1,6 @@
 "use client";
 import { useParams } from "next/navigation";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
 import { Calendar, Clock, MapPin, Grid3x3, Plus, Trash2, MapPinned, Zap, ChevronDown, ChevronUp, ExternalLink, RotateCcw } from "lucide-react";
 import { useState, useMemo } from "react";
@@ -120,6 +120,7 @@ function MatrixView({ scheduled, fields }: { scheduled: ScheduledMatch[]; fields
 
 export default function SchedulePage() {
   const { id: tournamentId } = useParams<{ id: string }>();
+  const { mutate: globalMutate } = useSWRConfig();
   const [view, setView] = useState<View>("list");
   const [newFieldName, setNewFieldName] = useState("");
   const [addingField, setAddingField] = useState(false);
@@ -194,7 +195,10 @@ export default function SchedulePage() {
     setResetting(true);
     try {
       await api.delete(`/api/tournaments/${tournamentId}/schedule`);
-      await mutateScheduled();
+      // Invalidate all SWR cache entries for this tournament so the board, list, and matrix all refresh
+      await globalMutate((key: unknown) => typeof key === "string" && key.includes(tournamentId));
+    } catch (err: any) {
+      alert(err.message || "Reset failed");
     } finally {
       setResetting(false);
     }
