@@ -103,4 +103,34 @@ export async function teamRoutes(app: FastifyInstance) {
     await prisma.player.delete({ where: { id } });
     return reply.send({ success: true, data: null });
   });
+
+  // Update team payment status
+  app.patch("/api/teams/:id/payment", { preHandler: authenticate }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const team = await prisma.team.findUnique({ where: { id } });
+    if (!team) return reply.code(404).send({ success: false, error: "Not found" });
+    await assertTournamentAccess(req.userId!, team.tournamentId, "manage_teams");
+    const body = z.object({
+      paymentStatus: z.enum(["UNPAID", "PAID", "WAIVED"]),
+      paymentAmount: z.number().int().min(0).optional().nullable(),
+    }).parse(req.body);
+    const updated = await prisma.team.update({ where: { id }, data: body });
+    return reply.send({ success: true, data: updated });
+  });
+
+  // Bulk import teams from CSV data
+  app.post("/api/tournaments/:tournamentId/teams/import", { preHandler: authenticate }, async (req, reply) => {
+    const { tournamentId } = req.params as { tournamentId: string };
+    await assertTournamentAccess(req.userId!, tournamentId, "manage_teams");
+    const body = z.object({
+      teams: z.array(z.object({
+        name: z.string().min(1).max(200),
+        country: z.string().optional(),
+      })).min(1).max(500),
+    }).parse(req.body);
+    const created = await prisma.$transaction(
+      body.teams.map((t) => prisma.team.create({ data: { tournamentId, ...t } }))
+    );
+    return reply.code(201).send({ success: true, data: created });
+  });
 }

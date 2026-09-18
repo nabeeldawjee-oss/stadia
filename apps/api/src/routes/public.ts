@@ -34,7 +34,7 @@ export async function publicRoutes(app: FastifyInstance) {
           },
           orderBy: { orderIndex: "asc" },
         },
-        posts: { where: { published: true }, orderBy: { publishedAt: "desc" }, take: 20 },
+        posts: { orderBy: { publishedAt: "desc" }, take: 20 },
       },
     });
 
@@ -44,10 +44,10 @@ export async function publicRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: tournament });
   });
 
-  // Public schedule for a tournament
+  // Public schedule for a tournament (supports ?day=YYYY-MM-DD and ?fieldId=xxx)
   app.get("/api/public/t/:slug/schedule", async (req, reply) => {
     const { slug } = req.params as { slug: string };
-    const { day } = req.query as { day?: string };
+    const { day, fieldId } = req.query as { day?: string; fieldId?: string };
 
     const tournament = await prisma.tournament.findUnique({ where: { slug }, select: { id: true, status: true } });
     if (!tournament || tournament.status === "DRAFT") {
@@ -58,15 +58,36 @@ export async function publicRoutes(app: FastifyInstance) {
       where: {
         match: { tournamentId: tournament.id },
         ...(day ? { startTime: { gte: new Date(`${day}T00:00:00`), lt: new Date(`${day}T23:59:59`) } } : {}),
+        ...(fieldId ? { fieldId } : {}),
       },
       include: {
         field: true,
-        match: { include: { homeTeam: true, awayTeam: true } },
+        match: {
+          include: {
+            homeTeam: true,
+            awayTeam: true,
+            group: { include: { phase: { include: { division: { select: { name: true } } } } } },
+          },
+        },
       },
       orderBy: { startTime: "asc" },
     });
 
     return reply.send({ success: true, data: scheduled });
+  });
+
+  // Public fields list
+  app.get("/api/public/t/:slug/fields", async (req, reply) => {
+    const { slug } = req.params as { slug: string };
+    const tournament = await prisma.tournament.findUnique({ where: { slug }, select: { id: true, status: true } });
+    if (!tournament || tournament.status === "DRAFT") {
+      return reply.code(404).send({ success: false, error: "Not found" });
+    }
+    const fields = await prisma.field.findMany({
+      where: { tournamentId: tournament.id },
+      orderBy: { orderIndex: "asc" },
+    });
+    return reply.send({ success: true, data: fields });
   });
 
   // Public team page

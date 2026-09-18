@@ -58,6 +58,7 @@ model Tournament {
   follows      TournamentFollow[]
   statDefs     StatDefinition[]
   matches      Match[]
+  sponsors     Sponsor[]
 }
 
 enum TournamentStatus {
@@ -243,12 +244,14 @@ model MatchSet {
 // ─────────────────────────────────────────
 
 model Team {
-  id           String     @id @default(cuid())
-  tournamentId String
-  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
-  name         String
-  logoUrl      String?
-  country      String?
+  id            String        @id @default(cuid())
+  tournamentId  String
+  tournament    Tournament    @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  name          String
+  logoUrl       String?
+  country       String?
+  paymentStatus PaymentStatus @default(UNPAID)
+  paymentAmount Int?
 
   players         Player[]
   groupMemberships GroupTeam[]
@@ -259,6 +262,12 @@ model Team {
   registration    Registration?
   follows         TeamFollow[]
   standings       GroupStanding[]
+}
+
+enum PaymentStatus {
+  UNPAID
+  PAID
+  WAIVED
 }
 
 model Player {
@@ -657,4 +666,34 @@ model DeviceToken {
 enum Platform {
   IOS
   ANDROID
+}
+
+// ─────────────────────────────────────────
+// SPONSORS
+// ─────────────────────────────────────────
+
+model Sponsor {
+  id                String      @id @default(cuid())
+  tournamentId      String
+  tournament        Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  name              String
+  tier              SponsorTier @default(BRONZE)
+  logoUrl           String?
+  contactName       String?
+  contactEmail      String?
+  contactPhone      String?
+  cashAmount        Int         @default(0)
+  inKindDescription String?
+  displayConfirmed  Boolean     @default(false)
+  itemsReceived     Boolean     @default(false)
+  notes             String?
+  createdAt         DateTime    @default(now())
+}
+
+enum SponsorTier {
+  PLATINUM
+  GOLD
+  SILVER
+  BRONZE
+  BLUE
 }

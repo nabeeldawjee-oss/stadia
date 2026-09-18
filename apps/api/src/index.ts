@@ -22,6 +22,7 @@ import { notificationRoutes } from "./routes/notifications";
 import { presentationRoutes } from "./routes/presentation";
 import { advancementRoutes } from "./routes/advancement";
 import { teamTokenRoutes } from "./routes/team-token";
+import { sponsorRoutes } from "./routes/sponsors";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -106,6 +107,7 @@ async function bootstrap() {
   await app.register(presentationRoutes);
   await app.register(advancementRoutes);
   await app.register(teamTokenRoutes);
+  await app.register(sponsorRoutes);
 
   app.get("/health", async () => ({ ok: true }));
 

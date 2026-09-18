@@ -2,7 +2,7 @@
 import { useParams } from "next/navigation";
 import useSWR from "swr";
 import { api } from "@/lib/api";
-import { Calendar, Clock, MapPin, Grid3x3, Plus, Trash2, MapPinned, Zap, ChevronDown, ChevronUp } from "lucide-react";
+import { Calendar, Clock, MapPin, Grid3x3, Plus, Trash2, MapPinned, Zap, ChevronDown, ChevronUp, ExternalLink, LayoutGrid } from "lucide-react";
 import { useState, useMemo } from "react";
 import ScheduleBoard from "./ScheduleBoard";
 
@@ -35,7 +35,90 @@ interface ScheduledMatch {
   };
 }
 
-type View = "list" | "board";
+type View = "list" | "board" | "matrix";
+
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" });
+}
+
+function MatrixView({ scheduled, fields }: { scheduled: ScheduledMatch[]; fields: Field[] }) {
+  if (!scheduled.length) return (
+    <div className="text-center py-10 text-gray-400 text-sm bg-white border border-gray-200 rounded-2xl">
+      No matches scheduled yet.
+    </div>
+  );
+
+  // Group by day
+  const days: string[] = [...new Set(scheduled.map((s) => s.startTime.slice(0, 10)))].sort();
+
+  return (
+    <div className="space-y-6">
+      {days.map((day) => {
+        const dayMatches = scheduled.filter((s) => s.startTime.slice(0, 10) === day);
+        // Collect unique time slots
+        const slots = [...new Set(dayMatches.map((s) => s.startTime))].sort();
+        // fieldId → name
+        const fieldMap = Object.fromEntries(fields.map((f) => [f.id, f.name]));
+        // Collect only fields that appear on this day
+        const dayFieldIds = [...new Set(dayMatches.map((s) => s.field.id))];
+        const orderedFields = fields.filter((f) => dayFieldIds.includes(f.id));
+
+        return (
+          <div key={day}>
+            <h3 className="text-sm font-semibold text-gray-500 mb-2 uppercase tracking-wide">{fmtDate(day)}</h3>
+            <div className="bg-white border border-gray-200 rounded-2xl overflow-x-auto">
+              <table className="w-full text-xs border-collapse min-w-max">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="px-3 py-2 text-left font-medium text-gray-500 border-r border-gray-100 w-16">Time</th>
+                    {orderedFields.map((f) => (
+                      <th key={f.id} className="px-3 py-2 text-center font-medium text-gray-700 border-r border-gray-100 last:border-r-0 min-w-[140px]">{f.name}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {slots.map((slot) => {
+                    const slotMatches = dayMatches.filter((s) => s.startTime === slot);
+                    return (
+                      <tr key={slot} className="border-t border-gray-50 hover:bg-gray-50">
+                        <td className="px-3 py-2 font-mono text-gray-400 border-r border-gray-100 whitespace-nowrap">{fmtTime(slot)}</td>
+                        {orderedFields.map((f) => {
+                          const m = slotMatches.find((s) => s.field.id === f.id);
+                          return (
+                            <td key={f.id} className="px-2 py-1.5 border-r border-gray-100 last:border-r-0 text-center">
+                              {m ? (
+                                <div className={`rounded-lg px-2 py-1.5 text-xs leading-tight ${
+                                  m.match.status === "COMPLETED" ? "bg-purple-50 text-purple-700" :
+                                  m.match.status === "IN_PROGRESS" ? "bg-green-50 text-green-700" :
+                                  "bg-blue-50 text-blue-700"
+                                }`}>
+                                  <div className="font-medium">{m.match.homeTeam?.name ?? "TBD"}</div>
+                                  {m.match.homeScore != null
+                                    ? <div className="font-bold">{m.match.homeScore} – {m.match.awayScore}</div>
+                                    : <div className="text-gray-400">vs</div>}
+                                  <div className="font-medium">{m.match.awayTeam?.name ?? "TBD"}</div>
+                                </div>
+                              ) : (
+                                <span className="text-gray-200">—</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function SchedulePage() {
   const { id: tournamentId } = useParams<{ id: string }>();
@@ -66,7 +149,7 @@ export default function SchedulePage() {
   );
 
   const { data: scheduled, mutate: mutateScheduled } = useSWR<ScheduledMatch[]>(
-    view === "list" ? `/api/tournaments/${tournamentId}/schedule` : null,
+    view !== "board" ? `/api/tournaments/${tournamentId}/schedule` : null,
     () => api.get(`/api/tournaments/${tournamentId}/schedule`)
   );
 
@@ -317,24 +400,41 @@ export default function SchedulePage() {
         )}
       </div>
 
+      {/* Field display links */}
+      {fields && fields.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <ExternalLink className="w-4 h-4 text-gray-400" />
+            <h3 className="text-sm font-semibold text-gray-900">Field display screens</h3>
+            <span className="text-xs text-gray-400">Open on a TV or tablet at each field — auto-refreshes every 15s</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {fields.map((f) => (
+              <a
+                key={f.id}
+                href={`/display/${tournamentId}/field/${f.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-brand-600 hover:bg-brand-50 hover:border-brand-200 transition"
+              >
+                <MapPin className="w-3 h-3" /> {f.name} <ExternalLink className="w-3 h-3 opacity-50" />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Schedule view toggle */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900">Schedule</h2>
         <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
-          <button
-            onClick={() => setView("list")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-              view === "list" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
+          <button onClick={() => setView("list")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition ${view === "list" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
             <Calendar className="w-3.5 h-3.5" /> List
           </button>
-          <button
-            onClick={() => setView("board")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-              view === "board" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
+          <button onClick={() => setView("matrix")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition ${view === "matrix" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
+            <LayoutGrid className="w-3.5 h-3.5" /> Matrix
+          </button>
+          <button onClick={() => setView("board")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition ${view === "board" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
             <Grid3x3 className="w-3.5 h-3.5" /> Board
           </button>
         </div>
@@ -342,6 +442,8 @@ export default function SchedulePage() {
 
       {view === "board" ? (
         <ScheduleBoard tournamentId={tournamentId} />
+      ) : view === "matrix" ? (
+        <MatrixView scheduled={scheduled ?? []} fields={fields ?? []} />
       ) : !scheduled ? (
         <div className="text-gray-400 text-sm text-center py-8">Loading...</div>
       ) : scheduled.length === 0 ? (
