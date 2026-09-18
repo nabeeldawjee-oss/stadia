@@ -7,7 +7,8 @@ import { useForm } from "react-hook-form";
 import { Copy, Check, ExternalLink, Tv } from "lucide-react";
 
 interface Tournament { id: string; slug: string; name: string; }
-interface Branding { primaryColor?: string; secondaryColor?: string; logoUrl?: string; }
+interface Branding { primaryColor?: string; secondaryColor?: string; fontFamily?: string; logoUrl?: string; bannerUrl?: string; customCss?: string; }
+interface Slideshow { autoPlaySeconds?: number; showStandings?: boolean; showSchedule?: boolean; showBracket?: boolean; showPosts?: boolean; theme?: string; }
 interface Post { id: string; title: string; body: string; published: boolean; createdAt: string; }
 
 export default function PresentationPage() {
@@ -20,17 +21,23 @@ export default function PresentationPage() {
 
   const { data: tournament } = useSWR<Tournament>(`/api/tournaments/${tournamentId}`, () => api.get(`/api/tournaments/${tournamentId}`));
   const { data: branding, mutate: mutateBranding } = useSWR<Branding>(`/api/tournaments/${tournamentId}/branding`, () => api.get(`/api/tournaments/${tournamentId}/branding`));
+  const { data: slideshow, mutate: mutateSlideshow } = useSWR<Slideshow>(`/api/tournaments/${tournamentId}/slideshow`, () => api.get(`/api/tournaments/${tournamentId}/slideshow`));
   const { data: posts, mutate: mutatePosts } = useSWR<Post[]>(`/api/tournaments/${tournamentId}/posts`, () => api.get(`/api/tournaments/${tournamentId}/posts`));
 
-  const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm<Branding>();
+  const { register: regBranding, handleSubmit: handleBranding, reset: resetBranding, formState: { isSubmitting: brandingSubmitting } } = useForm<Branding>();
+  const { register: regSlideshow, handleSubmit: handleSlideshow, reset: resetSlideshow, formState: { isSubmitting: slideshowSubmitting } } = useForm<Slideshow>();
 
-  useEffect(() => {
-    if (branding) reset(branding);
-  }, [branding, reset]);
+  useEffect(() => { if (branding) resetBranding(branding); }, [branding, resetBranding]);
+  useEffect(() => { if (slideshow) resetSlideshow(slideshow); }, [slideshow, resetSlideshow]);
 
   const saveBranding = async (values: Branding) => {
     await api.put(`/api/tournaments/${tournamentId}/branding`, values);
     await mutateBranding();
+  };
+
+  const saveSlideshow = async (values: Slideshow) => {
+    await api.put(`/api/tournaments/${tournamentId}/slideshow`, { ...values, autoPlaySeconds: values.autoPlaySeconds ? Number(values.autoPlaySeconds) : undefined });
+    await mutateSlideshow();
   };
 
   const loadQr = async () => {
@@ -98,23 +105,65 @@ export default function PresentationPage() {
       {/* Branding */}
       <div className="bg-white border border-gray-200 rounded-2xl p-6">
         <h2 className="font-semibold text-gray-900 mb-4">Branding</h2>
-        <form onSubmit={handleSubmit(saveBranding)} className="space-y-3">
+        <form onSubmit={handleBranding(saveBranding)} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Primary color</label>
-              <input {...register("primaryColor")} type="color" className="w-full h-10 border border-gray-300 rounded-lg cursor-pointer" />
+              <input {...regBranding("primaryColor")} type="color" className="w-full h-10 border border-gray-300 rounded-lg cursor-pointer" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Secondary color</label>
-              <input {...register("secondaryColor")} type="color" className="w-full h-10 border border-gray-300 rounded-lg cursor-pointer" />
+              <input {...regBranding("secondaryColor")} type="color" className="w-full h-10 border border-gray-300 rounded-lg cursor-pointer" />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Logo URL</label>
-            <input {...register("logoUrl")} placeholder="https://..." className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+            <label className="block text-xs font-medium text-gray-600 mb-1">Font family</label>
+            <input {...regBranding("fontFamily")} placeholder="e.g. Inter, Roboto" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
           </div>
-          <button type="submit" disabled={isSubmitting} className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50 transition">
-            {isSubmitting ? "Saving..." : "Save branding"}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Logo URL</label>
+            <input {...regBranding("logoUrl")} placeholder="https://..." className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Banner URL</label>
+            <input {...regBranding("bannerUrl")} placeholder="https://..." className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Custom CSS</label>
+            <textarea {...regBranding("customCss")} rows={3} placeholder=":root { --brand: #e11d48; }" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none" />
+          </div>
+          <button type="submit" disabled={brandingSubmitting} className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50 transition">
+            {brandingSubmitting ? "Saving..." : "Save branding"}
+          </button>
+        </form>
+      </div>
+
+      {/* Slideshow config */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-6">
+        <h2 className="font-semibold text-gray-900 mb-4">Slideshow settings</h2>
+        <form onSubmit={handleSlideshow(saveSlideshow)} className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Auto-play interval (seconds)</label>
+            <input {...regSlideshow("autoPlaySeconds")} type="number" min={3} max={60} placeholder="10" className="w-32 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Theme</label>
+            <select {...regSlideshow("theme")} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-gray-600">Show sections</p>
+            {(["showStandings", "showSchedule", "showBracket", "showPosts"] as const).map((key) => (
+              <label key={key} className="flex items-center gap-2 cursor-pointer">
+                <input {...regSlideshow(key)} type="checkbox" className="rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+                <span className="text-sm text-gray-700 capitalize">{key.replace("show", "")}</span>
+              </label>
+            ))}
+          </div>
+          <button type="submit" disabled={slideshowSubmitting} className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50 transition">
+            {slideshowSubmitting ? "Saving..." : "Save slideshow settings"}
           </button>
         </form>
       </div>

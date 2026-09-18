@@ -114,6 +114,7 @@ export default function TeamView() {
         {scoring && (
           <ScoreEntryModal
             match={scoring}
+            token={token ?? undefined}
             onClose={() => setScoring(null)}
             onSaved={() => { setScoring(null); mutate(); }}
           />

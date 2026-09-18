@@ -91,7 +91,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
     const { matchId } = req.params as { matchId: string };
     const body = z.object({ fieldId: z.string(), startTime: z.string() }).parse(req.body);
     const match = await prisma.match.findUnique({ where: { id: matchId } });
-    if (!match) return reply.code(404).send({ error: "Not found" });
+    if (!match) return reply.code(404).send({ success: false, error: "Not found" });
     await assertTournamentAccess(req.userId!, match.tournamentId, "manage_schedule");
     await moveMatch(matchId, body.fieldId, new Date(body.startTime), 60);
     return reply.send({ success: true, data: null });

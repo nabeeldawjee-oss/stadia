@@ -5,7 +5,7 @@ export async function teamTokenRoutes(app: FastifyInstance) {
   // Public: resolve team token and return team + their matches
   app.get("/api/team", async (req, reply) => {
     const { token } = req.query as { token?: string };
-    if (!token) return reply.status(400).send({ error: "token required" });
+    if (!token) return reply.status(400).send({ success: false, error: "token required" });
 
     const scoreToken = await prisma.scoreToken.findUnique({
       where: { token },
@@ -13,7 +13,7 @@ export async function teamTokenRoutes(app: FastifyInstance) {
     });
 
     if (!scoreToken || scoreToken.type !== "TEAM" || !scoreToken.active) {
-      return reply.status(401).send({ error: "Invalid or expired token" });
+      return reply.status(401).send({ success: false, error: "Invalid or expired token" });
     }
 
     await prisma.scoreToken.update({
@@ -21,11 +21,7 @@ export async function teamTokenRoutes(app: FastifyInstance) {
       data: { lastUsedAt: new Date() },
     });
 
-    return reply.send({
-      id: scoreToken.id,
-      type: scoreToken.type,
-      team: scoreToken.team,
-    });
+    return reply.send({ success: true, data: { id: scoreToken.id, type: scoreToken.type, team: scoreToken.team } });
   });
 
   // Public: get matches for a team (used by team token page)
@@ -42,6 +38,6 @@ export async function teamTokenRoutes(app: FastifyInstance) {
       },
       orderBy: { createdAt: "asc" },
     });
-    return reply.send(matches);
+    return reply.send({ success: true, data: matches });
   });
 }

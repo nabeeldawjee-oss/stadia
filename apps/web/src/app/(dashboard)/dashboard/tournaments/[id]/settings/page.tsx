@@ -12,7 +12,7 @@ const schema = z.object({
   name: z.string().min(2),
   sport: z.string().min(1),
   description: z.string().optional(),
-  status: z.enum(["DRAFT", "PUBLISHED", "ACTIVE", "COMPLETED", "ARCHIVED"]),
+  status: z.enum(["DRAFT", "ACTIVE", "COMPLETED", "CANCELLED"]),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -64,10 +64,9 @@ export default function SettingsPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
             <select {...register("status")} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
               <option value="DRAFT">Draft</option>
-              <option value="PUBLISHED">Published</option>
               <option value="ACTIVE">Active</option>
               <option value="COMPLETED">Completed</option>
-              <option value="ARCHIVED">Archived</option>
+              <option value="CANCELLED">Cancelled</option>
             </select>
           </div>
           <button
