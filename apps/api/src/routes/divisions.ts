@@ -10,6 +10,8 @@ const divisionSchema = z.object({
   name: z.string().min(1).max(100),
   orderIndex: z.number().int().optional(),
   teamLimit: z.number().int().optional(),
+  matchDurationMinutes: z.number().int().min(1).max(300).optional(),
+  halfDurationMinutes: z.number().int().min(1).max(150).optional(),
 });
 
 const phaseSchema = z.object({
@@ -200,7 +202,7 @@ export async function divisionRoutes(app: FastifyInstance) {
         },
       },
     });
-    const phases = divisions.flatMap((d) => d.phases.map((p) => ({ ...p, divisionName: d.name })));
+    const phases = divisions.flatMap((d) => d.phases.map((p) => ({ ...p, divisionName: d.name, divisionId: d.id, divisionMatchDurationMinutes: d.matchDurationMinutes, divisionHalfDurationMinutes: d.halfDurationMinutes })));
     return reply.send({ success: true, data: phases });
   });
 

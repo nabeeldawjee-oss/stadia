@@ -78,6 +78,8 @@ model Division {
   name         String
   orderIndex   Int        @default(0)
   teamLimit    Int?
+  matchDurationMinutes Int @default(90)
+  halfDurationMinutes  Int @default(45)
 
   phases     Phase[]
   groupTeams GroupTeam[]

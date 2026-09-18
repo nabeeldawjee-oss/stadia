@@ -8,7 +8,7 @@ import { Plus, ChevronRight, Play } from "lucide-react";
 interface Group { id: string; name: string; }
 interface Bracket { id: string; size: number; }
 interface Phase { id: string; name: string; type: string; status: string; groups: Group[]; brackets: Bracket[]; }
-interface Division { id: string; name: string; phases: Phase[]; }
+interface Division { id: string; name: string; matchDurationMinutes: number; halfDurationMinutes: number; phases: Phase[]; }
 
 export default function DivisionPage() {
   const { id: tournamentId, divisionId } = useParams<{ id: string; divisionId: string }>();
@@ -17,14 +17,36 @@ export default function DivisionPage() {
   const [phaseName, setPhaseName] = useState("");
   const [phaseType, setPhaseType] = useState<"GROUP_STAGE" | "KNOCKOUT">("GROUP_STAGE");
   const [starting, setStarting] = useState<string | null>(null);
+  const [matchDuration, setMatchDuration] = useState("");
+  const [halfDuration, setHalfDuration] = useState("");
+  const [savingDurations, setSavingDurations] = useState(false);
 
   const { data: division, mutate } = useSWR<Division>(
     `/api/divisions/${divisionId}`,
     async () => {
       const t = await api.get<{ divisions: Division[] }>(`/api/tournaments/${tournamentId}`);
       return t.divisions.find((d) => d.id === divisionId)!;
+    },
+    {
+      onSuccess: (d) => {
+        setMatchDuration(String(d.matchDurationMinutes ?? 90));
+        setHalfDuration(String(d.halfDurationMinutes ?? 45));
+      },
     }
   );
+
+  const saveDurations = async () => {
+    setSavingDurations(true);
+    try {
+      await api.put(`/api/divisions/${divisionId}`, {
+        matchDurationMinutes: parseInt(matchDuration, 10),
+        halfDurationMinutes: parseInt(halfDuration, 10),
+      });
+      await mutate();
+    } finally {
+      setSavingDurations(false);
+    }
+  };
 
   const addPhase = async () => {
     if (!phaseName.trim()) return;
@@ -57,6 +79,45 @@ export default function DivisionPage() {
         <button onClick={() => router.push(`/dashboard/tournaments/${tournamentId}/format`)} className="hover:text-gray-700">Format</button>
         <ChevronRight className="w-3.5 h-3.5" />
         <span className="text-gray-900 font-medium">{division?.name}</span>
+      </div>
+
+      {/* Game time settings */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-5">
+        <h3 className="text-sm font-semibold text-gray-900 mb-4">Match time settings</h3>
+        <div className="flex flex-wrap gap-4 items-end">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Match duration (min)</label>
+            <input
+              type="number"
+              min={1}
+              max={300}
+              value={matchDuration}
+              onChange={(e) => setMatchDuration(e.target.value)}
+              className="w-28 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Half duration (min)</label>
+            <input
+              type="number"
+              min={1}
+              max={150}
+              value={halfDuration}
+              onChange={(e) => setHalfDuration(e.target.value)}
+              className="w-28 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+          </div>
+          <button
+            onClick={saveDurations}
+            disabled={savingDurations}
+            className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50 transition"
+          >
+            {savingDurations ? "Saving..." : "Save"}
+          </button>
+        </div>
+        <p className="text-xs text-gray-400 mt-3">
+          These values are used as defaults when auto-scheduling matches in this division.
+        </p>
       </div>
 
       <div className="flex items-center justify-between">
