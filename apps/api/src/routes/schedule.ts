@@ -76,16 +76,15 @@ export async function scheduleRoutes(app: FastifyInstance) {
     const { tournamentId } = req.params as { tournamentId: string };
     await assertTournamentAccess(req.userId!, tournamentId, "manage_schedule");
 
+    // ScheduledMatch uses matchId as @id — no separate id field
     const scheduledMatches = await prisma.scheduledMatch.findMany({
       where: { match: { tournamentId } },
-      select: { id: true, matchId: true },
+      select: { matchId: true },
     });
-
     const matchIds = scheduledMatches.map((s) => s.matchId);
-    const scheduledMatchIds = scheduledMatches.map((s) => s.id);
 
     await prisma.$transaction([
-      prisma.scheduledMatch.deleteMany({ where: { id: { in: scheduledMatchIds } } }),
+      prisma.scheduledMatch.deleteMany({ where: { match: { tournamentId } } }),
       prisma.match.updateMany({
         where: { id: { in: matchIds }, status: "SCHEDULED" },
         data: { status: "PENDING" },
