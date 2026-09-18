@@ -46,11 +46,11 @@ export async function scoreRoutes(app: FastifyInstance) {
   // Token-based score entry (referee or team)
   app.post("/api/scores", async (req, reply) => {
     const { token } = req.query as { token?: string };
-    const { matchId } = z.object({ matchId: z.string() }).parse(req.body);
 
     if (!token) return reply.code(401).send({ success: false, error: "Token required" });
 
     try {
+      const { matchId } = z.object({ matchId: z.string() }).parse(req.body);
       const ctx = await resolveToken(token);
       const body = scoreSchema.parse(req.body);
 

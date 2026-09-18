@@ -118,6 +118,7 @@ export async function registrationRoutes(app: FastifyInstance) {
   app.post("/api/webhooks/stripe", {
     config: { rawBody: true },
   }, async (req, reply) => {
+    if (!stripe) return reply.code(503).send({ success: false, error: "Stripe not configured" });
     const sig = req.headers["stripe-signature"] as string;
     let event;
     try {

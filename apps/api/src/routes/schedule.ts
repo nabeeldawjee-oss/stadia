@@ -94,7 +94,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
     if (!match) return reply.code(404).send({ error: "Not found" });
     await assertTournamentAccess(req.userId!, match.tournamentId, "manage_schedule");
     await moveMatch(matchId, body.fieldId, new Date(body.startTime), 60);
-    return reply.send({ ok: true });
+    return reply.send({ success: true, data: null });
   });
 
   // Fields CRUD
