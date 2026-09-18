@@ -2,7 +2,7 @@
 import { useParams } from "next/navigation";
 import useSWR from "swr";
 import { api } from "@/lib/api";
-import { Calendar, Clock, MapPin, Grid3x3, Plus, Trash2, MapPinned, Zap, ChevronDown, ChevronUp, ExternalLink, LayoutGrid } from "lucide-react";
+import { Calendar, Clock, MapPin, Grid3x3, Plus, Trash2, MapPinned, Zap, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import { useState, useMemo } from "react";
 import ScheduleBoard from "./ScheduleBoard";
 
@@ -60,8 +60,6 @@ function MatrixView({ scheduled, fields }: { scheduled: ScheduledMatch[]; fields
         const dayMatches = scheduled.filter((s) => s.startTime.slice(0, 10) === day);
         // Collect unique time slots
         const slots = [...new Set(dayMatches.map((s) => s.startTime))].sort();
-        // fieldId → name
-        const fieldMap = Object.fromEntries(fields.map((f) => [f.id, f.name]));
         // Collect only fields that appear on this day
         const dayFieldIds = [...new Set(dayMatches.map((s) => s.field.id))];
         const orderedFields = fields.filter((f) => dayFieldIds.includes(f.id));
@@ -432,7 +430,7 @@ export default function SchedulePage() {
             <Calendar className="w-3.5 h-3.5" /> List
           </button>
           <button onClick={() => setView("matrix")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition ${view === "matrix" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
-            <LayoutGrid className="w-3.5 h-3.5" /> Matrix
+            <Grid3x3 className="w-3.5 h-3.5" /> Matrix
           </button>
           <button onClick={() => setView("board")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition ${view === "board" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
             <Grid3x3 className="w-3.5 h-3.5" /> Board
