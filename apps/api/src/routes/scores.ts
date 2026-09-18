@@ -81,6 +81,20 @@ export async function scoreRoutes(app: FastifyInstance) {
     }
   });
 
+  // Advance match status (SCHEDULED → IN_PROGRESS → COMPLETED)
+  app.put("/api/matches/:matchId/status", { preHandler: authenticate }, async (req, reply) => {
+    const { matchId } = req.params as { matchId: string };
+    const match = await prisma.match.findUnique({ where: { id: matchId } });
+    if (!match) return reply.code(404).send({ success: false, error: "Not found" });
+    await assertTournamentAccess(req.userId!, match.tournamentId, "enter_results");
+    const { status } = z.object({ status: z.enum(["IN_PROGRESS", "COMPLETED", "CANCELLED"]) }).parse(req.body);
+    const updated = await prisma.match.update({
+      where: { id: matchId },
+      data: { status, ...(status === "COMPLETED" ? { completedAt: new Date() } : {}) },
+    });
+    return reply.send({ success: true, data: updated });
+  });
+
   // Score override log
   app.get("/api/matches/:matchId/score-log", { preHandler: authenticate }, async (req, reply) => {
     const { matchId } = req.params as { matchId: string };

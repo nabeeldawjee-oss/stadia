@@ -2,9 +2,10 @@
 import { useParams } from "next/navigation";
 import useSWR, { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
-import { Calendar, Clock, MapPin, Grid3x3, Plus, Trash2, MapPinned, Zap, ChevronDown, ChevronUp, ExternalLink, RotateCcw } from "lucide-react";
+import { Calendar, Clock, MapPin, Grid3x3, Plus, Trash2, MapPinned, Zap, ChevronDown, ChevronUp, ExternalLink, RotateCcw, Pencil } from "lucide-react";
 import { useState, useMemo } from "react";
 import ScheduleBoard from "./ScheduleBoard";
+import ScoreEntryModal from "@/components/ScoreEntryModal";
 
 interface Field { id: string; name: string; orderIndex: number | null; }
 interface Group { id: string; name: string; _count?: { teams: number }; }
@@ -135,6 +136,7 @@ export default function SchedulePage() {
   const [restMinutes, setRestMinutes] = useState("60");
   const [autoRunning, setAutoRunning] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [scoringMatch, setScoringMatch] = useState<{ id: string; homeTeam: { id: string; name: string } | null; awayTeam: { id: string; name: string } | null; status: string } | null>(null);
   const [autoResult, setAutoResult] = useState<{ scheduled: number; unscheduled: number } | null>(null);
   const [autoError, setAutoError] = useState<string | null>(null);
 
@@ -514,12 +516,33 @@ export default function SchedulePage() {
                     }`}>
                       {s.match.status.replace("_", " ")}
                     </div>
+                    {s.match.status !== "CANCELLED" && s.match.homeTeam && s.match.awayTeam && (
+                      <button
+                        onClick={() => setScoringMatch(s.match)}
+                        className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition ${
+                          s.match.status === "COMPLETED"
+                            ? "bg-gray-50 text-gray-400 hover:bg-gray-100"
+                            : "bg-brand-50 text-brand-700 hover:bg-brand-100"
+                        }`}
+                      >
+                        <Pencil className="w-3 h-3" />
+                        {s.match.status === "COMPLETED" ? "Edit" : "Score"}
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
           ))}
         </div>
+      )}
+
+      {scoringMatch && (
+        <ScoreEntryModal
+          match={scoringMatch}
+          onClose={() => setScoringMatch(null)}
+          onSaved={() => { setScoringMatch(null); mutateScheduled(); }}
+        />
       )}
     </div>
   );
