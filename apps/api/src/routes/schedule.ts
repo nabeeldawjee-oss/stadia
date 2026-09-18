@@ -76,22 +76,13 @@ export async function scheduleRoutes(app: FastifyInstance) {
     const { tournamentId } = req.params as { tournamentId: string };
     await assertTournamentAccess(req.userId!, tournamentId, "manage_schedule");
 
-    // ScheduledMatch uses matchId as @id — no separate id field
-    const scheduledMatches = await prisma.scheduledMatch.findMany({
-      where: { match: { tournamentId } },
-      select: { matchId: true },
+    await prisma.scheduledMatch.deleteMany({ where: { match: { tournamentId } } });
+    const updated = await prisma.match.updateMany({
+      where: { tournamentId, status: "SCHEDULED" },
+      data: { status: "PENDING" },
     });
-    const matchIds = scheduledMatches.map((s) => s.matchId);
 
-    await prisma.$transaction([
-      prisma.scheduledMatch.deleteMany({ where: { match: { tournamentId } } }),
-      prisma.match.updateMany({
-        where: { id: { in: matchIds }, status: "SCHEDULED" },
-        data: { status: "PENDING" },
-      }),
-    ]);
-
-    return reply.send({ success: true, data: { reset: matchIds.length } });
+    return reply.send({ success: true, data: { reset: updated.count } });
   });
 
   // Unschedule a single match
@@ -101,13 +92,11 @@ export async function scheduleRoutes(app: FastifyInstance) {
     if (!match) return reply.code(404).send({ success: false, error: "Not found" });
     await assertTournamentAccess(req.userId!, match.tournamentId, "manage_schedule");
 
-    await prisma.$transaction([
-      prisma.scheduledMatch.deleteMany({ where: { matchId } }),
-      prisma.match.updateMany({
-        where: { id: matchId, status: "SCHEDULED" },
-        data: { status: "PENDING" },
-      }),
-    ]);
+    await prisma.scheduledMatch.deleteMany({ where: { matchId } });
+    await prisma.match.updateMany({
+      where: { id: matchId, status: "SCHEDULED" },
+      data: { status: "PENDING" },
+    });
 
     return reply.send({ success: true, data: null });
   });
