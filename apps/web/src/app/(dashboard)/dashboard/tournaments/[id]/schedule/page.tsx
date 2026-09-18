@@ -2,7 +2,7 @@
 import { useParams } from "next/navigation";
 import useSWR from "swr";
 import { api } from "@/lib/api";
-import { Calendar, Clock, MapPin, Grid3x3, Plus, Trash2, MapPinned, Zap, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
+import { Calendar, Clock, MapPin, Grid3x3, Plus, Trash2, MapPinned, Zap, ChevronDown, ChevronUp, ExternalLink, RotateCcw } from "lucide-react";
 import { useState, useMemo } from "react";
 import ScheduleBoard from "./ScheduleBoard";
 
@@ -133,6 +133,7 @@ export default function SchedulePage() {
   const [slotDuration, setSlotDuration] = useState("90");
   const [restMinutes, setRestMinutes] = useState("60");
   const [autoRunning, setAutoRunning] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [autoResult, setAutoResult] = useState<{ scheduled: number; unscheduled: number } | null>(null);
   const [autoError, setAutoError] = useState<string | null>(null);
 
@@ -186,6 +187,17 @@ export default function SchedulePage() {
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+  };
+
+  const resetSchedule = async () => {
+    if (!confirm("Reset the entire schedule? All match assignments will be cleared and matches returned to unscheduled. This cannot be undone.")) return;
+    setResetting(true);
+    try {
+      await api.delete(`/api/tournaments/${tournamentId}/schedule`);
+      await mutateScheduled();
+    } finally {
+      setResetting(false);
+    }
   };
 
   const runAutoSchedule = async () => {
@@ -424,7 +436,17 @@ export default function SchedulePage() {
 
       {/* Schedule view toggle */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">Schedule</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold text-gray-900">Schedule</h2>
+          <button
+            onClick={resetSchedule}
+            disabled={resetting}
+            className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-40 transition"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            {resetting ? "Resetting..." : "Reset schedule"}
+          </button>
+        </div>
         <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
           <button onClick={() => setView("list")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition ${view === "list" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
             <Calendar className="w-3.5 h-3.5" /> List

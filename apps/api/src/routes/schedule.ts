@@ -71,6 +71,48 @@ export async function scheduleRoutes(app: FastifyInstance) {
     }
   });
 
+  // Reset entire schedule for a tournament
+  app.delete("/api/tournaments/:tournamentId/schedule", { preHandler: authenticate }, async (req, reply) => {
+    const { tournamentId } = req.params as { tournamentId: string };
+    await assertTournamentAccess(req.userId!, tournamentId, "manage_schedule");
+
+    const scheduledMatches = await prisma.scheduledMatch.findMany({
+      where: { match: { tournamentId } },
+      select: { id: true, matchId: true },
+    });
+
+    const matchIds = scheduledMatches.map((s) => s.matchId);
+    const scheduledMatchIds = scheduledMatches.map((s) => s.id);
+
+    await prisma.$transaction([
+      prisma.scheduledMatch.deleteMany({ where: { id: { in: scheduledMatchIds } } }),
+      prisma.match.updateMany({
+        where: { id: { in: matchIds }, status: "SCHEDULED" },
+        data: { status: "PENDING" },
+      }),
+    ]);
+
+    return reply.send({ success: true, data: { reset: matchIds.length } });
+  });
+
+  // Unschedule a single match
+  app.delete("/api/matches/:matchId/schedule", { preHandler: authenticate }, async (req, reply) => {
+    const { matchId } = req.params as { matchId: string };
+    const match = await prisma.match.findUnique({ where: { id: matchId } });
+    if (!match) return reply.code(404).send({ success: false, error: "Not found" });
+    await assertTournamentAccess(req.userId!, match.tournamentId, "manage_schedule");
+
+    await prisma.$transaction([
+      prisma.scheduledMatch.deleteMany({ where: { matchId } }),
+      prisma.match.updateMany({
+        where: { id: matchId, status: "SCHEDULED" },
+        data: { status: "PENDING" },
+      }),
+    ]);
+
+    return reply.send({ success: true, data: null });
+  });
+
   // Unscheduled matches (for schedule board)
   app.get("/api/tournaments/:tournamentId/matches/unscheduled", { preHandler: authenticate }, async (req, reply) => {
     const { tournamentId } = req.params as { tournamentId: string };

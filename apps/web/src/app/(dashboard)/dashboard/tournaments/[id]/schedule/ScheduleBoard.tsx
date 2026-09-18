@@ -2,7 +2,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { apiFetch, api } from "@/lib/api";
-import { GripVertical, Clock } from "lucide-react";
+import { GripVertical, Clock, X } from "lucide-react";
 
 interface Field { id: string; name: string; }
 interface Match {
@@ -10,7 +10,17 @@ interface Match {
   homeTeam: { name: string } | null;
   awayTeam: { name: string } | null;
   status: string;
-  scheduledMatch?: { id: string; startTime: string; fieldId: string; } | null;
+}
+interface ScheduledMatch {
+  id: string;
+  startTime: string;
+  field: { id: string; name: string };
+  match: {
+    id: string;
+    homeTeam: { id: string; name: string } | null;
+    awayTeam: { id: string; name: string } | null;
+    status: string;
+  };
 }
 interface Slot { time: string; label: string; }
 
@@ -22,6 +32,11 @@ const TIME_SLOTS: Slot[] = Array.from({ length: 24 }, (_, i) => {
   return { time: `${String(h).padStart(2, "0")}:${m}`, label: `${hour}:${m} ${ampm}` };
 });
 
+function toLocalHHMM(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 interface Props { tournamentId: string; }
 
 export default function ScheduleBoard({ tournamentId }: Props) {
@@ -29,7 +44,7 @@ export default function ScheduleBoard({ tournamentId }: Props) {
     `/api/tournaments/${tournamentId}/fields`,
     () => apiFetch(`/api/tournaments/${tournamentId}/fields`)
   );
-  const { data: matches, mutate } = useSWR<Match[]>(
+  const { data: matches, mutate: mutateUnscheduled } = useSWR<Match[]>(
     `/api/tournaments/${tournamentId}/matches/unscheduled`,
     () => apiFetch(`/api/tournaments/${tournamentId}/matches/unscheduled`)
   );
@@ -37,6 +52,15 @@ export default function ScheduleBoard({ tournamentId }: Props) {
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [dragging, setDragging] = useState<Match | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
+
+  const { data: scheduled, mutate: mutateScheduled } = useSWR<ScheduledMatch[]>(
+    `/api/tournaments/${tournamentId}/schedule?day=${date}`,
+    () => apiFetch(`/api/tournaments/${tournamentId}/schedule?day=${date}`)
+  );
+
+  const mutate = async () => {
+    await Promise.all([mutateUnscheduled(), mutateScheduled()]);
+  };
 
   const drop = async (fieldId: string, slotTime: string) => {
     if (!dragging) return;
@@ -51,6 +75,11 @@ export default function ScheduleBoard({ tournamentId }: Props) {
       setSaving(null);
       setDragging(null);
     }
+  };
+
+  const unschedule = async (matchId: string) => {
+    await api.delete(`/api/matches/${matchId}/schedule`);
+    await mutate();
   };
 
   return (
@@ -125,18 +154,41 @@ export default function ScheduleBoard({ tournamentId }: Props) {
                 </div>
                 {fields.map((f) => {
                   const isTarget = saving === `${f.id}-${slot.time}`;
+                  const scheduledHere = scheduled?.find(
+                    (s) => s.field.id === f.id && toLocalHHMM(s.startTime) === slot.time
+                  );
                   return (
                     <div
                       key={f.id}
                       onDragOver={(e) => { e.preventDefault(); }}
-                      onDrop={() => drop(f.id, slot.time)}
+                      onDrop={() => !scheduledHere && drop(f.id, slot.time)}
                       className={`border-r last:border-r-0 border-gray-100 min-h-[48px] relative transition ${
-                        dragging ? "bg-brand-50/30 hover:bg-brand-50" : ""
+                        dragging && !scheduledHere ? "bg-brand-50/30 hover:bg-brand-50" : ""
                       } ${isTarget ? "bg-brand-100" : ""}`}
                     >
                       {isTarget && (
                         <div className="absolute inset-0 flex items-center justify-center text-xs text-brand-600 font-medium">
                           Saving...
+                        </div>
+                      )}
+                      {scheduledHere && !isTarget && (
+                        <div className={`m-1 rounded-lg px-2 py-1.5 text-xs leading-tight relative group ${
+                          scheduledHere.match.status === "COMPLETED" ? "bg-purple-50 text-purple-700 border border-purple-200" :
+                          scheduledHere.match.status === "IN_PROGRESS" ? "bg-green-50 text-green-700 border border-green-200" :
+                          "bg-blue-50 text-blue-700 border border-blue-200"
+                        }`}>
+                          <div className="font-medium truncate">{scheduledHere.match.homeTeam?.name ?? "TBD"}</div>
+                          <div className="text-center opacity-60 text-[10px]">vs</div>
+                          <div className="font-medium truncate">{scheduledHere.match.awayTeam?.name ?? "TBD"}</div>
+                          {scheduledHere.match.status === "SCHEDULED" && (
+                            <button
+                              onClick={() => unschedule(scheduledHere.match.id)}
+                              className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 transition text-gray-400 hover:text-red-500"
+                              title="Unschedule"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
