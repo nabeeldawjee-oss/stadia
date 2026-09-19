@@ -18,7 +18,7 @@ const TIMEZONES = [
 
 const SPORTS = ["Football", "Futsal", "Basketball", "Volleyball", "Cricket", "Rugby", "Netball", "Hockey"];
 
-function SetupWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
+function SetupWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string, tab?: string) => void }) {
   const [step, setStep] = useState<WizardStep>("info");
   const [tournamentId, setTournamentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +54,7 @@ function SetupWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (
 
   const addTeams = async () => {
     if (!tournamentId || !teamInput.trim()) { setStep("done"); return; }
-    setSaving(true);
+    setSaving(true); setError(null);
     try {
       const lines = teamInput.split("\n").map((l) => l.trim()).filter(Boolean);
       const teams = lines.map((l) => {
@@ -64,9 +64,10 @@ function SetupWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (
       if (teams.length > 0) {
         await api.post(`/api/tournaments/${tournamentId}/teams/import`, { teams });
       }
-    } catch {}
-    finally { setSaving(false); }
-    setStep("done");
+      setStep("done");
+    } catch (e: any) {
+      setError(e.message ?? "Failed to import teams. You can add them later from the Teams tab.");
+    } finally { setSaving(false); }
   };
 
   const inputCls = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
@@ -86,7 +87,16 @@ function SetupWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (
             <h2 className="text-base font-semibold text-gray-900">Create tournament</h2>
             <p className="text-xs text-gray-400 mt-0.5">Step {STEPS.findIndex((s) => s.key === step) + 1} of {STEPS.length}</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 transition">
+          <button
+            onClick={() => {
+              if (tournamentId && step !== "done") {
+                onCreated(tournamentId);
+              } else {
+                onClose();
+              }
+            }}
+            className="text-gray-400 hover:text-gray-700 transition"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -162,7 +172,7 @@ function SetupWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (
                 <label className="block text-sm font-medium text-gray-700 mb-1">Add teams <span className="text-gray-400 font-normal">(optional — you can do this later)</span></label>
                 <textarea
                   value={teamInput}
-                  onChange={(e) => setTeamInput(e.target.value)}
+                  onChange={(e) => { setTeamInput(e.target.value); setError(null); }}
                   autoFocus
                   rows={8}
                   placeholder={"One team per line:\nTeam Alpha\nTeam Beta, South Africa\nTeam Gamma"}
@@ -170,10 +180,16 @@ function SetupWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (
                 />
                 <p className="text-xs text-gray-400 mt-1.5">Format: <code>Team Name</code> or <code>Team Name, Country</code> — one per line</p>
               </div>
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  <p className="text-red-600 text-sm">{error}</p>
+                  <button onClick={() => setStep("done")} className="text-xs text-red-500 underline mt-1">Skip and continue anyway</button>
+                </div>
+              )}
               <div className="flex justify-between gap-3 pt-1">
                 <button onClick={() => setStep("done")} className="text-sm text-gray-400 hover:text-gray-600 font-medium">Skip</button>
                 <div className="flex gap-2">
-                  <button onClick={() => setStep("info")} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition">Back</button>
+                  <button onClick={() => { setStep("info"); setError(null); }} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition">Back</button>
                   <button onClick={addTeams} disabled={saving} className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-40 transition">
                     {saving ? "Importing..." : "Continue"} <ArrowRight className="w-3.5 h-3.5" />
                   </button>
@@ -196,7 +212,7 @@ function SetupWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (
                   { icon: Calendar, label: "Build the schedule", hint: "Add fields and auto-schedule matches", tab: "schedule" },
                   { icon: Users, label: "Manage registration", hint: "Open registration and set entry fees", tab: "registration" },
                 ].map(({ icon: Icon, label, hint, tab }) => (
-                  <button key={tab} onClick={() => { onCreated(tournamentId); window.location.href = `/dashboard/tournaments/${tournamentId}/${tab}`; }}
+                  <button key={tab} onClick={() => onCreated(tournamentId, tab)}
                     className="w-full flex items-center gap-3 border border-gray-200 rounded-xl px-4 py-3 hover:border-brand-300 hover:bg-brand-50 transition text-left">
                     <div className="w-8 h-8 bg-brand-50 rounded-lg flex items-center justify-center shrink-0">
                       <Icon className="w-4 h-4 text-brand-600" />
@@ -210,7 +226,7 @@ function SetupWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (
                 ))}
               </div>
               <div className="flex justify-end pt-1">
-                <button onClick={() => { onCreated(tournamentId); }} className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition">
+                <button onClick={() => onCreated(tournamentId)} className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition">
                   Go to overview →
                 </button>
               </div>
@@ -228,10 +244,10 @@ export default function DashboardPage() {
 
   const { data: tournaments, mutate } = useSWR<Tournament[]>("/api/tournaments", () => api.get("/api/tournaments"));
 
-  const handleCreated = async (id: string) => {
-    await mutate();
+  const handleCreated = async (id: string, tab?: string) => {
     setShowWizard(false);
-    router.push(`/dashboard/tournaments/${id}`);
+    await mutate();
+    router.push(tab ? `/dashboard/tournaments/${id}/${tab}` : `/dashboard/tournaments/${id}`);
   };
 
   const statusColor: Record<string, string> = {
