@@ -1,7 +1,7 @@
 "use client";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
-import useSWR from "swr";
+import useSWR, { mutate as globalMutate } from "swr";
 import { api } from "@/lib/api";
 import { Plus, ChevronRight } from "lucide-react";
 
@@ -40,7 +40,7 @@ export default function GroupsPage() {
     setGenerating(groupId);
     try {
       await api.post(`/api/groups/${groupId}/generate-matches`, {});
-      await mutate();
+      await Promise.all([mutate(), globalMutate(`/api/groups/${groupId}`)]);
     } catch (err: any) {
       alert(err.message);
     } finally {
