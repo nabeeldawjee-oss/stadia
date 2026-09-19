@@ -40,29 +40,4 @@ export async function notificationRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: null });
   });
 
-  // Broadcast announcement to followers
-  app.post("/api/tournaments/:tournamentId/announce", { preHandler: authenticate }, async (req, reply) => {
-    const { tournamentId } = req.params as { tournamentId: string };
-    await assertTournamentAccess(req.userId!, tournamentId, "manage_general");
-    const { title, message } = z.object({ title: z.string(), message: z.string() }).parse(req.body);
-
-    const follows = await prisma.tournamentFollow.findMany({
-      where: { tournamentId },
-      include: { user: { include: { deviceTokens: true } } },
-    });
-
-    const tokens = follows.flatMap((f) => f.user.deviceTokens.map((d) => d.token));
-
-    const { queuePush, queueEmail } = await import("../engines/notifications/workers");
-
-    await queuePush(tokens, title, message, { tournamentId });
-
-    for (const follow of follows) {
-      if (follow.user.email) {
-        await queueEmail(follow.user.email, title, `<p>${message}</p>`);
-      }
-    }
-
-    return reply.send({ success: true, data: { sent: tokens.length } });
-  });
 }
