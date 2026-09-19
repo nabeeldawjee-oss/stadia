@@ -1,28 +1,29 @@
 import { prisma } from "@stadia/db";
 
-export async function startNextPhase(currentPhaseId: string): Promise<void> {
+export async function startNextPhase(
+  currentPhaseId: string,
+  opts: { force?: boolean } = {}
+): Promise<{ incompleteMatches: number }> {
   const currentPhase = await prisma.phase.findUnique({
     where: { id: currentPhaseId },
     include: { division: true },
   });
   if (!currentPhase) throw new Error("Phase not found");
 
-  // Validate all matches complete
   const incomplete = await prisma.match.count({
     where: {
       OR: [
         { groupId: { in: await getGroupIds(currentPhaseId) } },
         { bracketId: { in: await getBracketIds(currentPhaseId) } },
       ],
-      status: { not: "COMPLETED" },
+      status: { notIn: ["COMPLETED", "CANCELLED"] },
     },
   });
 
-  if (incomplete > 0) {
-    throw new Error(`${incomplete} match(es) are not yet completed`);
+  if (incomplete > 0 && !opts.force) {
+    throw new Error(`${incomplete} match(es) are not yet completed. Pass force=true to advance anyway.`);
   }
 
-  // Find next phase
   const nextPhase = await prisma.phase.findFirst({
     where: {
       divisionId: currentPhase.divisionId,
@@ -31,15 +32,12 @@ export async function startNextPhase(currentPhaseId: string): Promise<void> {
     orderBy: { orderIndex: "asc" },
   });
 
-  if (!nextPhase) throw new Error("No next phase found");
-
-  // Get advancement rules
+  // Apply advancement rules (seed bracket slots from group standings)
   const rules = await prisma.advancementRule.findMany({
     where: { fromPhaseId: currentPhaseId },
     include: { toBracketSlot: true },
   });
 
-  // For each rule, find the team at that position and place them
   for (const rule of rules) {
     const standing = await prisma.groupStanding.findFirst({
       where: {
@@ -48,9 +46,7 @@ export async function startNextPhase(currentPhaseId: string): Promise<void> {
         position: rule.finishingPosition,
       },
     });
-
     if (!standing || !rule.toBracketSlotId) continue;
-
     await prisma.bracketSlot.update({
       where: { id: rule.toBracketSlotId },
       data: { teamId: standing.teamId },
@@ -62,10 +58,14 @@ export async function startNextPhase(currentPhaseId: string): Promise<void> {
     data: { status: "COMPLETED" },
   });
 
-  await prisma.phase.update({
-    where: { id: nextPhase.id },
-    data: { status: "ACTIVE" },
-  });
+  if (nextPhase) {
+    await prisma.phase.update({
+      where: { id: nextPhase.id },
+      data: { status: "ACTIVE" },
+    });
+  }
+
+  return { incompleteMatches: incomplete };
 }
 
 async function getGroupIds(phaseId: string): Promise<string[]> {

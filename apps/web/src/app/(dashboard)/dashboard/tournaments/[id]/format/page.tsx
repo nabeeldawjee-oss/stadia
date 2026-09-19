@@ -2,7 +2,7 @@
 import { useParams } from "next/navigation";
 import useSWR from "swr";
 import { api } from "@/lib/api";
-import { GitBranch, Plus, ChevronRight } from "lucide-react";
+import { GitBranch, Plus, ChevronRight, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -19,6 +19,12 @@ export default function FormatPage() {
     `/api/tournaments/${tournamentId}`,
     () => api.get(`/api/tournaments/${tournamentId}`)
   );
+
+  const deleteDivision = async (divId: string, divName: string) => {
+    if (!confirm(`Delete division "${divName}"? This will permanently remove all its phases, groups, matches, and bracket data. This cannot be undone.`)) return;
+    await api.delete(`/api/divisions/${divId}`);
+    await mutate();
+  };
 
   const addDivision = async () => {
     if (!divName.trim()) return;
@@ -75,12 +81,21 @@ export default function FormatPage() {
             <div key={div.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
               <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
                 <span className="font-medium text-gray-900">{div.name}</span>
-                <button
-                  onClick={() => router.push(`/dashboard/tournaments/${tournamentId}/format/divisions/${div.id}`)}
-                  className="text-xs text-brand-600 hover:underline flex items-center gap-1"
-                >
-                  Manage <ChevronRight className="w-3 h-3" />
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => router.push(`/dashboard/tournaments/${tournamentId}/format/divisions/${div.id}`)}
+                    className="text-xs text-brand-600 hover:underline flex items-center gap-1"
+                  >
+                    Manage <ChevronRight className="w-3 h-3" />
+                  </button>
+                  <button
+                    onClick={() => deleteDivision(div.id, div.name)}
+                    className="text-gray-300 hover:text-red-500 transition"
+                    title="Delete division"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
               {div.phases?.length === 0 ? (
                 <div className="px-5 py-3 text-xs text-gray-400">No phases yet</div>

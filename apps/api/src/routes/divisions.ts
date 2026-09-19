@@ -109,16 +109,102 @@ export async function divisionRoutes(app: FastifyInstance) {
     return reply.code(201).send({ success: true, data: phase });
   });
 
-  // Start next phase
+  // Delete phase (only PENDING phases can be deleted)
+  app.delete("/api/phases/:id", { preHandler: authenticate }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const phase = await prisma.phase.findUnique({ where: { id }, include: { division: true } });
+    if (!phase) return reply.code(404).send({ success: false, error: "Not found" });
+    await assertTournamentAccess(req.userId!, phase.division.tournamentId, "manage_general");
+    if (phase.status !== "PENDING") {
+      return reply.code(400).send({ success: false, error: "Only PENDING phases can be deleted. Complete or reset the phase first." });
+    }
+    await prisma.phase.delete({ where: { id } });
+    return reply.send({ success: true, data: null });
+  });
+
+  // Advance-preview: show standings + what each team advances to, without executing
+  app.get("/api/phases/:id/advance-preview", { preHandler: authenticate }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const phase = await prisma.phase.findUnique({ where: { id }, include: { division: true } });
+    if (!phase) return reply.code(404).send({ success: false, error: "Not found" });
+    await assertTournamentAccess(req.userId!, phase.division.tournamentId, "view_only");
+
+    const [groups, rules, nextPhase, incomplete] = await Promise.all([
+      prisma.group.findMany({
+        where: { phaseId: id },
+        include: {
+          standings: { include: { team: true }, orderBy: { position: "asc" } },
+        },
+      }),
+      prisma.advancementRule.findMany({
+        where: { fromPhaseId: id },
+        include: { toBracketSlot: true, toPhase: true },
+      }),
+      prisma.phase.findFirst({
+        where: { divisionId: phase.divisionId, orderIndex: { gt: phase.orderIndex } },
+        orderBy: { orderIndex: "asc" },
+      }),
+      prisma.match.count({
+        where: {
+          OR: [
+            { groupId: { in: (await prisma.group.findMany({ where: { phaseId: id }, select: { id: true } })).map(g => g.id) } },
+          ],
+          status: { notIn: ["COMPLETED", "CANCELLED"] },
+        },
+      }),
+    ]);
+
+    const seedings = rules.map((rule) => {
+      const group = groups.find((g) => g.id === rule.fromGroupId);
+      const standing = group?.standings.find((s) => s.position === rule.finishingPosition);
+      return {
+        groupId: rule.fromGroupId,
+        groupName: group?.name ?? "Unknown",
+        position: rule.finishingPosition,
+        team: standing ? { id: standing.team.id, name: standing.team.name } : null,
+        toPhaseId: rule.toPhaseId,
+        toPhaseName: rule.toPhase.name,
+        toBracketSlot: rule.toBracketSlot
+          ? { id: rule.toBracketSlot.id, roundNumber: rule.toBracketSlot.roundNumber, position: rule.toBracketSlot.position }
+          : null,
+      };
+    });
+
+    return reply.send({
+      success: true,
+      data: {
+        incompleteMatches: incomplete,
+        nextPhase: nextPhase ? { id: nextPhase.id, name: nextPhase.name } : null,
+        groups: groups.map((g) => ({
+          id: g.id,
+          name: g.name,
+          standings: g.standings.map((s) => ({
+            position: s.position,
+            team: { id: s.team.id, name: s.team.name },
+            points: s.points,
+            played: s.played,
+            wins: s.wins,
+            draws: s.draws,
+            losses: s.losses,
+            goalDifference: s.goalDifference,
+          })),
+        })),
+        seedings,
+      },
+    });
+  });
+
+  // Complete current phase and advance to next (force=true bypasses incomplete check)
   app.post("/api/phases/:id/start", { preHandler: authenticate }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const phase = await prisma.phase.findUnique({ where: { id }, include: { division: true } });
     if (!phase) return reply.code(404).send({ success: false, error: "Not found" });
     await assertTournamentAccess(req.userId!, phase.division.tournamentId, "manage_general");
     try {
+      const { force } = z.object({ force: z.boolean().optional() }).parse(req.body ?? {});
       const { startNextPhase } = await import("../engines/format/start-next-phase");
-      await startNextPhase(id);
-      return reply.send({ success: true, data: null });
+      const result = await startNextPhase(id, { force });
+      return reply.send({ success: true, data: result });
     } catch (err: any) {
       return reply.code(400).send({ success: false, error: err.message });
     }
