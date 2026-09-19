@@ -25,6 +25,7 @@ interface BracketDetail {
 
 export default function BracketView({ bracketId, tournamentId }: { bracketId: string; tournamentId?: string }) {
   const [scoring, setScoring] = useState<Match | null>(null);
+  const [generating, setGenerating] = useState(false);
   const { data: bracket, mutate } = useSWR<BracketDetail>(
     `/api/brackets/${bracketId}`,
     () => api.get(`/api/brackets/${bracketId}`)
@@ -34,6 +35,33 @@ export default function BracketView({ bracketId, tournamentId }: { bracketId: st
     return (
       <div className="flex items-center justify-center py-12 text-gray-400 text-sm">
         Loading bracket...
+      </div>
+    );
+  }
+
+  if (bracket.matches.length === 0) {
+    const generate = async () => {
+      setGenerating(true);
+      try {
+        await api.post(`/api/brackets/${bracketId}/generate-matches`, {});
+        await mutate();
+      } catch (err: any) {
+        alert(err.message);
+      } finally {
+        setGenerating(false);
+      }
+    };
+    return (
+      <div className="text-center py-10 text-gray-400 text-sm space-y-3">
+        <p>Bracket created. Generate match slots to start seeding teams.</p>
+        <button
+          onClick={generate}
+          disabled={generating}
+          className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition disabled:opacity-50 mx-auto"
+        >
+          <Zap className="w-3.5 h-3.5" />
+          {generating ? "Generating..." : "Generate matches"}
+        </button>
       </div>
     );
   }

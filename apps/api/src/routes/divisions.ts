@@ -305,6 +305,39 @@ export async function divisionRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: phases });
   });
 
+  // Repair: generate matches for an existing bracket that has slots but no matches
+  app.post("/api/brackets/:bracketId/generate-matches", { preHandler: authenticate }, async (req, reply) => {
+    const { bracketId } = req.params as { bracketId: string };
+    const bracket = await prisma.bracket.findUnique({
+      where: { id: bracketId },
+      include: {
+        phase: { include: { division: true } },
+        slots: true,
+        matches: true,
+      },
+    });
+    if (!bracket) return reply.code(404).send({ success: false, error: "Not found" });
+    if (bracket.matches.length > 0) return reply.code(400).send({ success: false, error: "Matches already exist" });
+
+    const tournamentId = bracket.phase.division.tournamentId;
+    const totalRounds = Math.log2(bracket.size);
+    const matchData: any[] = [];
+
+    for (let round = 1; round <= totalRounds; round++) {
+      const matchesInRound = bracket.size / Math.pow(2, round);
+      for (let pos = 1; pos <= matchesInRound; pos++) {
+        const homeSlot = bracket.slots.find(s => s.roundNumber === round && s.position === pos && s.side === "HOME");
+        const awaySlot = bracket.slots.find(s => s.roundNumber === round && s.position === pos && s.side === "AWAY");
+        if (homeSlot && awaySlot) {
+          matchData.push({ tournamentId, contextType: "BRACKET", bracketId, roundNumber: round, homeSlotId: homeSlot.id, awaySlotId: awaySlot.id });
+        }
+      }
+    }
+
+    await prisma.match.createMany({ data: matchData });
+    return reply.send({ success: true, data: { created: matchData.length } });
+  });
+
   // Get bracket tree
   app.get("/api/brackets/:bracketId", { preHandler: authenticate }, async (req, reply) => {
     const { bracketId } = req.params as { bracketId: string };
