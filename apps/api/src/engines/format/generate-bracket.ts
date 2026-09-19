@@ -2,12 +2,16 @@ import { prisma } from "@stadia/db";
 import { isPowerOfTwo, bracketRounds } from "@stadia/utils";
 
 export async function generateBracketSlots(bracketId: string): Promise<void> {
-  const bracket = await prisma.bracket.findUnique({ where: { id: bracketId } });
+  const bracket = await prisma.bracket.findUnique({
+    where: { id: bracketId },
+    include: { phase: { include: { division: true } } },
+  });
   if (!bracket) throw new Error("Bracket not found");
   if (!isPowerOfTwo(bracket.size)) throw new Error("Bracket size must be power of 2");
 
+  const tournamentId = (bracket as any).phase.division.tournamentId;
   const rounds = bracketRounds(bracket.size);
-  const slots: {
+  const slotData: {
     bracketId: string;
     roundNumber: number;
     position: number;
@@ -17,10 +21,45 @@ export async function generateBracketSlots(bracketId: string): Promise<void> {
   for (let round = 1; round <= rounds; round++) {
     const matchesInRound = bracket.size / Math.pow(2, round);
     for (let pos = 1; pos <= matchesInRound; pos++) {
-      slots.push({ bracketId, roundNumber: round, position: pos, side: "HOME" });
-      slots.push({ bracketId, roundNumber: round, position: pos, side: "AWAY" });
+      slotData.push({ bracketId, roundNumber: round, position: pos, side: "HOME" });
+      slotData.push({ bracketId, roundNumber: round, position: pos, side: "AWAY" });
     }
   }
 
-  await prisma.bracketSlot.createMany({ data: slots });
+  await prisma.bracketSlot.createMany({ data: slotData });
+
+  // Create one Match per (round, position) pair, linking the two slots
+  const createdSlots = await prisma.bracketSlot.findMany({
+    where: { bracketId },
+    orderBy: [{ roundNumber: "asc" }, { position: "asc" }, { side: "asc" }],
+  });
+
+  const matchData: {
+    tournamentId: string;
+    contextType: "BRACKET";
+    bracketId: string;
+    roundNumber: number;
+    homeSlotId: string;
+    awaySlotId: string;
+  }[] = [];
+
+  for (let round = 1; round <= rounds; round++) {
+    const matchesInRound = bracket.size / Math.pow(2, round);
+    for (let pos = 1; pos <= matchesInRound; pos++) {
+      const homeSlot = createdSlots.find(s => s.roundNumber === round && s.position === pos && s.side === "HOME");
+      const awaySlot = createdSlots.find(s => s.roundNumber === round && s.position === pos && s.side === "AWAY");
+      if (homeSlot && awaySlot) {
+        matchData.push({
+          tournamentId,
+          contextType: "BRACKET",
+          bracketId,
+          roundNumber: round,
+          homeSlotId: homeSlot.id,
+          awaySlotId: awaySlot.id,
+        });
+      }
+    }
+  }
+
+  await prisma.match.createMany({ data: matchData });
 }
