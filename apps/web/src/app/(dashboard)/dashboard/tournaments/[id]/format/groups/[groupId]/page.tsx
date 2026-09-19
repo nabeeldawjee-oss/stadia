@@ -3,7 +3,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import useSWR from "swr";
 import { api } from "@/lib/api";
-import { UserPlus, Zap } from "lucide-react";
+import { UserPlus, Zap, RefreshCw, Trash2 } from "lucide-react";
 import ScoreEntryModal from "@/components/ScoreEntryModal";
 
 interface Team { id: string; name: string; }
@@ -25,6 +25,7 @@ export default function GroupDetailPage() {
   const router = useRouter();
   const [addTeamId, setAddTeamId] = useState("");
   const [scoring, setScoring] = useState<Match | null>(null);
+  const [recalculating, setRecalculating] = useState(false);
 
   const { data: group, mutate } = useSWR<GroupDetail>(
     `/api/groups/${groupId}`,
@@ -44,6 +45,24 @@ export default function GroupDetailPage() {
     } catch (err: any) {
       alert(err.message);
     }
+  };
+
+  const recalculate = async () => {
+    setRecalculating(true);
+    try {
+      await api.post(`/api/groups/${groupId}/standings/recalculate`, {});
+      await mutate();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setRecalculating(false);
+    }
+  };
+
+  const removeTeam = async (teamId: string) => {
+    if (!confirm("Remove this team from the group? Their matches will be deleted.")) return;
+    await api.delete(`/api/groups/${groupId}/teams/${teamId}`);
+    await mutate();
   };
 
   const inGroup = new Set(group?.teams.map((t) => t.team.id) ?? []);
@@ -82,7 +101,12 @@ export default function GroupDetailPage() {
           </div>
           <div className="divide-y divide-gray-100">
             {group?.teams.map(({ team }) => (
-              <div key={team.id} className="px-4 py-2.5 text-sm text-gray-800">{team.name}</div>
+              <div key={team.id} className="px-4 py-2.5 text-sm text-gray-800 flex items-center justify-between group">
+                <span>{team.name}</span>
+                <button onClick={() => removeTeam(team.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
             ))}
             {group?.teams.length === 0 && (
               <div className="px-4 py-4 text-xs text-gray-400 text-center">No teams in this group yet.</div>
@@ -94,6 +118,10 @@ export default function GroupDetailPage() {
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
             <span className="font-medium text-gray-900 text-sm">Standings</span>
+            <button onClick={recalculate} disabled={recalculating} title="Recalculate standings from match results" className="flex items-center gap-1 text-xs text-gray-400 hover:text-brand-600 disabled:opacity-40 transition">
+              <RefreshCw className={`w-3 h-3 ${recalculating ? "animate-spin" : ""}`} />
+              {recalculating ? "Recalculating..." : "Recalculate"}
+            </button>
           </div>
           {!group?.standings.length ? (
             <div className="px-4 py-4 text-xs text-gray-400 text-center">Standings appear after matches are played.</div>

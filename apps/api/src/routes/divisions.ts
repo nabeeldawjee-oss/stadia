@@ -232,6 +232,19 @@ export async function divisionRoutes(app: FastifyInstance) {
     return reply.code(201).send({ success: true, data: null });
   });
 
+  // Remove team from group
+  app.delete("/api/groups/:groupId/teams/:teamId", { preHandler: authenticate }, async (req, reply) => {
+    const { groupId, teamId } = req.params as { groupId: string; teamId: string };
+    const group = await prisma.group.findUnique({ where: { id: groupId }, include: { phase: { include: { division: true } } } });
+    if (!group) return reply.code(404).send({ success: false, error: "Not found" });
+    await assertTournamentAccess(req.userId!, group.phase.division.tournamentId, "manage_teams");
+    // Delete group team + any group matches involving this team
+    await prisma.match.deleteMany({ where: { groupId, OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }] } });
+    await prisma.groupTeam.deleteMany({ where: { groupId, teamId } });
+    await prisma.groupStanding.deleteMany({ where: { groupId, teamId } });
+    return reply.send({ success: true, data: null });
+  });
+
   // Generate matches for group
   app.post("/api/groups/:groupId/generate-matches", { preHandler: authenticate }, async (req, reply) => {
     const { groupId } = req.params as { groupId: string };

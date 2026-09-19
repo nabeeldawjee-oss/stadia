@@ -9,6 +9,9 @@ const createSchema = z.object({
   name: z.string().min(1).max(200),
   sport: z.string().min(1).max(100),
   timezone: z.string().optional(),
+  description: z.string().optional(),
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
 });
 
 const updateSchema = z.object({
@@ -81,6 +84,9 @@ export async function tournamentRoutes(app: FastifyInstance) {
           slug,
           timezone: body.timezone || "Africa/Johannesburg",
           organizerId: request.userId!,
+          description: body.description || null,
+          startDate: body.startDate ? new Date(body.startDate) : null,
+          endDate: body.endDate ? new Date(body.endDate) : null,
         },
       });
 
