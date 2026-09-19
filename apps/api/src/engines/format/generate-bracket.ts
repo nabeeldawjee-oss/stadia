@@ -9,6 +9,9 @@ export async function generateBracketSlots(bracketId: string): Promise<void> {
   if (!bracket) throw new Error("Bracket not found");
   if (!isPowerOfTwo(bracket.size)) throw new Error("Bracket size must be power of 2");
 
+  const existingSlots = await prisma.bracketSlot.count({ where: { bracketId } });
+  if (existingSlots > 0) return;
+
   const tournamentId = (bracket as any).phase.division.tournamentId;
   const rounds = bracketRounds(bracket.size);
   const slotData: {
