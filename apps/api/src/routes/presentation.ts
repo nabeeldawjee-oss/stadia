@@ -9,17 +9,16 @@ const brandingSchema = z.object({
   primaryColor: z.string().optional(),
   secondaryColor: z.string().optional(),
   fontFamily: z.string().optional(),
-  logoUrl: z.string().url().optional(),
-  bannerUrl: z.string().url().optional(),
+  logoUrl: z.string().url().optional().or(z.literal("")),
+  bannerUrl: z.string().url().optional().or(z.literal("")),
+  backgroundUrl: z.string().url().optional().or(z.literal("")),
   customCss: z.string().optional(),
 });
 
 const postSchema = z.object({
   title: z.string().min(1),
   body: z.string(),
-  imageUrl: z.string().url().optional(),
   published: z.boolean().optional(),
-  publishedAt: z.string().optional(),
 });
 
 const slideshowSchema = z.object({
@@ -31,8 +30,13 @@ const slideshowSchema = z.object({
   theme: z.enum(["light", "dark"]).optional(),
 });
 
+const announceSchema = z.object({
+  title: z.string().min(1),
+  body: z.string(),
+});
+
 export async function presentationRoutes(app: FastifyInstance) {
-  // Get/update branding
+  // Get branding
   app.get("/api/tournaments/:tournamentId/branding", { preHandler: authenticate }, async (req, reply) => {
     const { tournamentId } = req.params as { tournamentId: string };
     await assertTournamentAccess(req.userId!, tournamentId, "manage_presentation");
@@ -40,14 +44,22 @@ export async function presentationRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: branding });
   });
 
+  // Update branding
   app.put("/api/tournaments/:tournamentId/branding", { preHandler: authenticate }, async (req, reply) => {
     const { tournamentId } = req.params as { tournamentId: string };
     await assertTournamentAccess(req.userId!, tournamentId, "manage_presentation");
     const body = brandingSchema.parse(req.body);
+    // Treat empty string as null for URL fields
+    const cleaned = {
+      ...body,
+      logoUrl: body.logoUrl || null,
+      bannerUrl: body.bannerUrl || null,
+      backgroundUrl: body.backgroundUrl || null,
+    };
     const branding = await prisma.tournamentBranding.upsert({
       where: { tournamentId },
-      create: { tournamentId, ...body },
-      update: body,
+      create: { tournamentId, ...cleaned },
+      update: cleaned,
     });
     return reply.send({ success: true, data: branding });
   });
@@ -70,8 +82,11 @@ export async function presentationRoutes(app: FastifyInstance) {
     const post = await prisma.tournamentPost.create({
       data: {
         tournamentId,
-        ...body,
-        publishedAt: body.published ? (body.publishedAt ? new Date(body.publishedAt) : new Date()) : null,
+        title: body.title,
+        body: body.body,
+        authorId: req.userId!,
+        published: body.published ?? true,
+        publishedAt: (body.published ?? true) ? new Date() : null,
       },
     });
     return reply.code(201).send({ success: true, data: post });
@@ -83,7 +98,13 @@ export async function presentationRoutes(app: FastifyInstance) {
     if (!post) return reply.code(404).send({ success: false, error: "Not found" });
     await assertTournamentAccess(req.userId!, post.tournamentId, "manage_presentation");
     const body = postSchema.partial().parse(req.body);
-    const updated = await prisma.tournamentPost.update({ where: { id }, data: body });
+    const updated = await prisma.tournamentPost.update({
+      where: { id },
+      data: {
+        ...body,
+        publishedAt: body.published === true ? (post.publishedAt ?? new Date()) : body.published === false ? null : undefined,
+      },
+    });
     return reply.send({ success: true, data: updated });
   });
 
@@ -116,7 +137,7 @@ export async function presentationRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: config });
   });
 
-  // Generate QR code for tournament public page
+  // Generate QR code
   app.get("/api/tournaments/:tournamentId/qr", { preHandler: authenticate }, async (req, reply) => {
     const { tournamentId } = req.params as { tournamentId: string };
     await assertTournamentAccess(req.userId!, tournamentId, "manage_presentation");
@@ -127,7 +148,37 @@ export async function presentationRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: { url, qr: dataUrl } });
   });
 
-  // Public slideshow endpoint (reads tournament data for display screen)
+  // Push announcement to tournament followers
+  app.post("/api/tournaments/:tournamentId/announce", { preHandler: authenticate }, async (req, reply) => {
+    const { tournamentId } = req.params as { tournamentId: string };
+    await assertTournamentAccess(req.userId!, tournamentId, "manage_presentation");
+    const body = announceSchema.parse(req.body);
+
+    // Create a published post for the announcement
+    const post = await prisma.tournamentPost.create({
+      data: {
+        tournamentId,
+        title: body.title,
+        body: body.body,
+        authorId: req.userId!,
+        published: true,
+        publishedAt: new Date(),
+      },
+    });
+
+    // Get followers' device tokens
+    const follows = await prisma.tournamentFollow.findMany({
+      where: { tournamentId },
+      include: { user: { include: { deviceTokens: true } } },
+    });
+    const tokens = follows.flatMap((f) => f.user.deviceTokens.map((dt) => dt.token));
+
+    // Fire-and-forget push (tokens collected, actual push delivery handled by notification service)
+    // For now we store in post and return the token list for the caller to use
+    return reply.send({ success: true, data: { post, recipientCount: tokens.length } });
+  });
+
+  // Public slideshow endpoint
   app.get("/api/public/t/:slug/slideshow", async (req, reply) => {
     const { slug } = req.params as { slug: string };
     const tournament = await prisma.tournament.findUnique({
@@ -135,7 +186,11 @@ export async function presentationRoutes(app: FastifyInstance) {
       include: {
         branding: true,
         slideshow: true,
-        posts: { where: { published: true }, orderBy: { publishedAt: "desc" }, take: 5 },
+        posts: {
+          where: { published: true },
+          orderBy: { publishedAt: "desc" },
+          take: 5,
+        },
         divisions: {
           include: {
             phases: {

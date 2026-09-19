@@ -3,7 +3,7 @@ import { useParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import useSWR from "swr";
 import { api } from "@/lib/api";
-import { Settings, Users, GitBranch, Calendar, BarChart2, Shield, UserCheck, ClipboardList, Tv, Star } from "lucide-react";
+import { Settings, Users, GitBranch, Calendar, BarChart2, Shield, UserCheck, ClipboardList, Tv, Star, TrendingUp } from "lucide-react";
 
 interface Tournament {
   id: string;
@@ -24,6 +24,7 @@ export default function TournamentLayout({ children }: { children: React.ReactNo
     { href: `/dashboard/tournaments/${id}/schedule`, label: "Schedule", icon: Calendar },
     { href: `/dashboard/tournaments/${id}/referees`, label: "Referees", icon: UserCheck },
     { href: `/dashboard/tournaments/${id}/registration`, label: "Registration", icon: ClipboardList },
+    { href: `/dashboard/tournaments/${id}/stats`, label: "Stats", icon: TrendingUp },
     { href: `/dashboard/tournaments/${id}/presentation`, label: "Presentation", icon: Tv },
     { href: `/dashboard/tournaments/${id}/sponsors`, label: "Sponsors", icon: Star },
     { href: `/dashboard/tournaments/${id}/admins`, label: "Admins", icon: Shield },

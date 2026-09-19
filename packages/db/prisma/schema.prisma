@@ -41,6 +41,9 @@ model Tournament {
   slug        String           @unique
   status      TournamentStatus @default(DRAFT)
   timezone    String           @default("Africa/Johannesburg")
+  description String?
+  startDate   DateTime?
+  endDate     DateTime?
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
@@ -495,7 +498,7 @@ model RegistrationSchema {
   deadline     DateTime?
   maxTeams     Int?
   currency     String     @default("ZAR")
-  fee          Int        @default(0)
+  entryFee     Int        @default(0)
 
   fields        FormField[]
   addOns        AddOn[]
@@ -603,18 +606,28 @@ model TournamentAdmin {
 // ─────────────────────────────────────────
 
 model TournamentBranding {
-  tournamentId  String     @id
-  tournament    Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
-  primaryColor  String?
-  logoUrl       String?
-  backgroundUrl String?
-  sponsors      Json       @default("[]")
+  tournamentId   String     @id
+  tournament     Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  primaryColor   String?
+  secondaryColor String?
+  fontFamily     String?
+  logoUrl        String?
+  bannerUrl      String?
+  backgroundUrl  String?
+  customCss      String?
+  sponsors       Json       @default("[]")
 }
 
 model SlideshowConfig {
-  tournamentId String     @id
-  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
-  slides       Json       @default("[]")
+  tournamentId     String     @id
+  tournament       Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  autoPlaySeconds  Int        @default(10)
+  showStandings    Boolean    @default(true)
+  showSchedule     Boolean    @default(true)
+  showBracket      Boolean    @default(true)
+  showPosts        Boolean    @default(true)
+  theme            String     @default("light")
+  slides           Json       @default("[]")
 }
 
 model TournamentPost {
@@ -625,7 +638,9 @@ model TournamentPost {
   body         String
   photos       Json       @default("[]")
   attachments  Json       @default("[]")
-  publishedAt  DateTime   @default(now())
+  published    Boolean    @default(true)
+  publishedAt  DateTime?
+  createdAt    DateTime   @default(now())
   authorId     String
   author       User       @relation(fields: [authorId], references: [id])
 }

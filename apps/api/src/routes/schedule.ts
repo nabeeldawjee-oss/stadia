@@ -151,4 +151,47 @@ export async function scheduleRoutes(app: FastifyInstance) {
     await prisma.field.delete({ where: { id } });
     return reply.send({ success: true, data: null });
   });
+
+  // Break blocks (block out time slots for lunch, prayer, ceremonies, etc.)
+  app.get("/api/tournaments/:tournamentId/break-blocks", { preHandler: authenticate }, async (req, reply) => {
+    const { tournamentId } = req.params as { tournamentId: string };
+    await assertTournamentAccess(req.userId!, tournamentId, "view_only");
+    const blocks = await prisma.breakBlock.findMany({
+      where: { tournamentId },
+      include: { field: { select: { id: true, name: true } } },
+      orderBy: { startTime: "asc" },
+    });
+    return reply.send({ success: true, data: blocks });
+  });
+
+  app.post("/api/tournaments/:tournamentId/break-blocks", { preHandler: authenticate }, async (req, reply) => {
+    const { tournamentId } = req.params as { tournamentId: string };
+    await assertTournamentAccess(req.userId!, tournamentId, "manage_schedule");
+    const body = z.object({
+      label: z.string().min(1).max(100),
+      date: z.string(),
+      startTime: z.string(),
+      endTime: z.string(),
+      fieldId: z.string().optional().nullable(),
+    }).parse(req.body);
+    const block = await prisma.breakBlock.create({
+      data: {
+        tournamentId,
+        label: body.label,
+        fieldId: body.fieldId ?? null,
+        startTime: new Date(`${body.date}T${body.startTime}:00Z`),
+        endTime: new Date(`${body.date}T${body.endTime}:00Z`),
+      },
+    });
+    return reply.code(201).send({ success: true, data: block });
+  });
+
+  app.delete("/api/break-blocks/:id", { preHandler: authenticate }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const block = await prisma.breakBlock.findUnique({ where: { id } });
+    if (!block) return reply.code(404).send({ success: false, error: "Not found" });
+    await assertTournamentAccess(req.userId!, block.tournamentId, "manage_schedule");
+    await prisma.breakBlock.delete({ where: { id } });
+    return reply.send({ success: true, data: null });
+  });
 }

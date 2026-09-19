@@ -80,10 +80,12 @@ export async function registrationRoutes(app: FastifyInstance) {
   app.get("/api/tournaments/:tournamentId/registrations", { preHandler: authenticate }, async (req, reply) => {
     const { tournamentId } = req.params as { tournamentId: string };
     await assertTournamentAccess(req.userId!, tournamentId, "manage_registration");
+    const schema = await prisma.registrationSchema.findUnique({ where: { tournamentId } });
+    if (!schema) return reply.send({ success: true, data: [] });
     const regs = await prisma.registration.findMany({
-      where: { tournamentId },
-      include: { addOns: { include: { addOn: true } } },
-      orderBy: { createdAt: "desc" },
+      where: { schemaId: schema.id },
+      include: { addOns: { include: { addOn: true } }, team: true },
+      orderBy: { reservedAt: "desc" },
     });
     return reply.send({ success: true, data: regs });
   });

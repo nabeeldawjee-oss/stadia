@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@stadia/db";
 import { authenticate } from "../middleware/authenticate";
 import { assertTournamentAccess } from "../engines/auth/permissions";
+import { generateScoreToken } from "../engines/referees/generate-token";
 
 const teamSchema = z.object({
   name: z.string().min(1).max(200),
@@ -105,7 +106,7 @@ export async function teamRoutes(app: FastifyInstance) {
   });
 
   // Update team payment status
-  app.patch("/api/teams/:id/payment", { preHandler: authenticate }, async (req, reply) => {
+  app.put("/api/teams/:id/payment", { preHandler: authenticate }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const team = await prisma.team.findUnique({ where: { id } });
     if (!team) return reply.code(404).send({ success: false, error: "Not found" });
@@ -116,6 +117,17 @@ export async function teamRoutes(app: FastifyInstance) {
     }).parse(req.body);
     const updated = await prisma.team.update({ where: { id }, data: body });
     return reply.send({ success: true, data: updated });
+  });
+
+  // Generate / regenerate team score token
+  app.post("/api/teams/:teamId/token", { preHandler: authenticate }, async (req, reply) => {
+    const { teamId } = req.params as { teamId: string };
+    const team = await prisma.team.findUnique({ where: { id: teamId } });
+    if (!team) return reply.code(404).send({ success: false, error: "Not found" });
+    await assertTournamentAccess(req.userId!, team.tournamentId, "manage_teams");
+    await prisma.scoreToken.deleteMany({ where: { teamId } });
+    const token = await generateScoreToken("TEAM", teamId, team.tournamentId);
+    return reply.send({ success: true, data: { token: token.token } });
   });
 
   // Bulk import teams from CSV data

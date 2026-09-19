@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { api } from "@/lib/api";
 import { useForm } from "react-hook-form";
-import { Copy, Check, ExternalLink, Tv } from "lucide-react";
+import { Copy, Check, ExternalLink, Tv, Megaphone } from "lucide-react";
 
 interface Tournament { id: string; slug: string; name: string; }
 interface Branding { primaryColor?: string; secondaryColor?: string; fontFamily?: string; logoUrl?: string; bannerUrl?: string; customCss?: string; }
@@ -18,6 +18,11 @@ export default function PresentationPage() {
   const [showPostForm, setShowPostForm] = useState(false);
   const [postTitle, setPostTitle] = useState("");
   const [postBody, setPostBody] = useState("");
+  const [announcing, setAnnouncing] = useState(false);
+  const [announceMsg, setAnnounceMsg] = useState<string | null>(null);
+  const [showAnnounceForm, setShowAnnounceForm] = useState(false);
+  const [announceTitle, setAnnounceTitle] = useState("");
+  const [announceBody, setAnnounceBody] = useState("");
 
   const { data: tournament } = useSWR<Tournament>(`/api/tournaments/${tournamentId}`, () => api.get(`/api/tournaments/${tournamentId}`));
   const { data: branding, mutate: mutateBranding } = useSWR<Branding>(`/api/tournaments/${tournamentId}/branding`, () => api.get(`/api/tournaments/${tournamentId}/branding`));
@@ -62,6 +67,21 @@ export default function PresentationPage() {
   const deletePost = async (postId: string) => {
     await api.delete(`/api/posts/${postId}`);
     await mutatePosts();
+  };
+
+  const sendAnnouncement = async () => {
+    if (!announceTitle.trim()) return;
+    setAnnouncing(true); setAnnounceMsg(null);
+    try {
+      const res = await api.post<{ recipientCount: number }>(`/api/tournaments/${tournamentId}/announce`, {
+        title: announceTitle, body: announceBody,
+      });
+      setAnnounceMsg(`Sent to ${res.recipientCount} follower${res.recipientCount !== 1 ? "s" : ""}`);
+      setAnnounceTitle(""); setAnnounceBody(""); setShowAnnounceForm(false);
+      await mutatePosts();
+    } catch (e: any) {
+      setAnnounceMsg(e.message || "Failed to send");
+    } finally { setAnnouncing(false); }
   };
 
   const slug = tournament?.slug ?? "";
@@ -166,6 +186,32 @@ export default function PresentationPage() {
             {slideshowSubmitting ? "Saving..." : "Save slideshow settings"}
           </button>
         </form>
+      </div>
+
+      {/* Announcement */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-6">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="font-semibold text-gray-900">Push announcement</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Creates a news post and notifies followers</p>
+          </div>
+          <button onClick={() => setShowAnnounceForm(true)} className="flex items-center gap-1.5 text-xs bg-amber-500 text-white px-3 py-1.5 rounded-lg hover:bg-amber-600 transition">
+            <Megaphone className="w-3.5 h-3.5" /> Announce
+          </button>
+        </div>
+        {announceMsg && (
+          <p className="text-xs text-green-600 bg-green-50 rounded-lg px-3 py-2 mb-2">{announceMsg}</p>
+        )}
+        {showAnnounceForm && (
+          <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+            <input value={announceTitle} onChange={(e) => setAnnounceTitle(e.target.value)} placeholder="Announcement title" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            <textarea value={announceBody} onChange={(e) => setAnnounceBody(e.target.value)} placeholder="Details..." rows={2} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none" />
+            <div className="flex gap-2">
+              <button onClick={sendAnnouncement} disabled={announcing || !announceTitle.trim()} className="bg-amber-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-40">{announcing ? "Sending..." : "Send"}</button>
+              <button onClick={() => setShowAnnounceForm(false)} className="bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium">Cancel</button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* News posts */}

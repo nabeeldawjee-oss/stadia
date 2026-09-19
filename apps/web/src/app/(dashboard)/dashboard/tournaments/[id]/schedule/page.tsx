@@ -2,7 +2,7 @@
 import { useParams } from "next/navigation";
 import useSWR, { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
-import { Calendar, Clock, MapPin, Grid3x3, Plus, Trash2, MapPinned, Zap, ChevronDown, ChevronUp, ExternalLink, RotateCcw, Pencil } from "lucide-react";
+import { Calendar, Clock, MapPin, Grid3x3, Plus, Trash2, MapPinned, Zap, ChevronDown, ChevronUp, ExternalLink, RotateCcw, Pencil, PauseCircle } from "lucide-react";
 import { useState, useMemo } from "react";
 import ScheduleBoard from "./ScheduleBoard";
 import ScoreEntryModal from "@/components/ScoreEntryModal";
@@ -136,6 +136,8 @@ export default function SchedulePage() {
   const [restMinutes, setRestMinutes] = useState("60");
   const [autoRunning, setAutoRunning] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [breaksOpen, setBreaksOpen] = useState(false);
+  const [newBreak, setNewBreak] = useState({ label: "", date: new Date().toISOString().split("T")[0], startTime: "12:00", endTime: "13:00", fieldId: "" });
   const [scoringMatch, setScoringMatch] = useState<{ id: string; homeTeam: { id: string; name: string } | null; awayTeam: { id: string; name: string } | null; status: string } | null>(null);
   const [autoResult, setAutoResult] = useState<{ scheduled: number; unscheduled: number } | null>(null);
   const [autoError, setAutoError] = useState<string | null>(null);
@@ -148,6 +150,12 @@ export default function SchedulePage() {
   const { data: phases } = useSWR<Phase[]>(
     `/api/tournaments/${tournamentId}/phases`,
     () => api.get(`/api/tournaments/${tournamentId}/phases`)
+  );
+
+  interface BreakBlock { id: string; label: string; startTime: string; endTime: string; field?: { name: string } | null; }
+  const { data: breakBlocks, mutate: mutateBreaks } = useSWR<BreakBlock[]>(
+    `/api/tournaments/${tournamentId}/break-blocks`,
+    () => api.get(`/api/tournaments/${tournamentId}/break-blocks`)
   );
 
   const { data: scheduled, mutate: mutateScheduled } = useSWR<ScheduledMatch[]>(
@@ -168,6 +176,21 @@ export default function SchedulePage() {
     await mutateFields();
     setNewFieldName("");
     setAddingField(false);
+  };
+
+  const addBreak = async () => {
+    if (!newBreak.label.trim()) return;
+    await api.post(`/api/tournaments/${tournamentId}/break-blocks`, {
+      label: newBreak.label, date: newBreak.date, startTime: newBreak.startTime, endTime: newBreak.endTime,
+      fieldId: newBreak.fieldId || undefined,
+    });
+    await mutateBreaks();
+    setNewBreak({ label: "", date: new Date().toISOString().split("T")[0], startTime: "12:00", endTime: "13:00", fieldId: "" });
+  };
+
+  const deleteBreak = async (id: string) => {
+    await api.delete(`/api/break-blocks/${id}`);
+    await mutateBreaks();
   };
 
   const deleteField = async (fieldId: string) => {
@@ -285,6 +308,82 @@ export default function SchedulePage() {
             />
             <button onClick={addField} className="bg-brand-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-brand-700 transition">Add</button>
             <button onClick={() => { setAddingField(false); setNewFieldName(""); }} className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium">Cancel</button>
+          </div>
+        )}
+      </div>
+
+      {/* Break blocks */}
+      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+        <button
+          onClick={() => setBreaksOpen((v) => !v)}
+          className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 transition"
+        >
+          <div className="flex items-center gap-2">
+            <PauseCircle className="w-4 h-4 text-orange-400" />
+            <span className="text-sm font-semibold text-gray-900">Break blocks</span>
+            <span className="text-xs text-gray-400">Lunch, prayer time, or other gaps in the schedule</span>
+            {breakBlocks && breakBlocks.length > 0 && (
+              <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">{breakBlocks.length}</span>
+            )}
+          </div>
+          {breaksOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+        </button>
+
+        {breaksOpen && (
+          <div className="px-5 pb-5 border-t border-gray-100 pt-4 space-y-4">
+            {/* Existing breaks */}
+            {breakBlocks && breakBlocks.length > 0 && (
+              <div className="space-y-1.5">
+                {breakBlocks.map((b) => (
+                  <div key={b.id} className="flex items-center gap-3 bg-orange-50 border border-orange-100 rounded-xl px-4 py-2.5 text-sm">
+                    <PauseCircle className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                    <span className="font-medium text-orange-900">{b.label}</span>
+                    <span className="text-orange-600 text-xs font-mono">
+                      {new Date(b.startTime).toLocaleTimeString("en-ZA", { timeZone: "UTC", hour: "2-digit", minute: "2-digit", hour12: false })}
+                      {" – "}
+                      {new Date(b.endTime).toLocaleTimeString("en-ZA", { timeZone: "UTC", hour: "2-digit", minute: "2-digit", hour12: false })}
+                    </span>
+                    {b.field && <span className="text-orange-400 text-xs">{b.field.name}</span>}
+                    <button onClick={() => deleteBreak(b.id)} className="ml-auto text-orange-300 hover:text-red-500 transition">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add new break */}
+            <div>
+              <p className="text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide">Add break</p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Label</label>
+                  <input value={newBreak.label} onChange={(e) => setNewBreak({ ...newBreak, label: e.target.value })} placeholder="e.g. Lunch break" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Date</label>
+                  <input type="date" value={newBreak.date} onChange={(e) => setNewBreak({ ...newBreak, date: e.target.value })} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Field (optional)</label>
+                  <select value={newBreak.fieldId} onChange={(e) => setNewBreak({ ...newBreak, fieldId: e.target.value })} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none">
+                    <option value="">All fields</option>
+                    {(fields ?? []).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">From</label>
+                  <input type="time" value={newBreak.startTime} onChange={(e) => setNewBreak({ ...newBreak, startTime: e.target.value })} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Until</label>
+                  <input type="time" value={newBreak.endTime} onChange={(e) => setNewBreak({ ...newBreak, endTime: e.target.value })} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                </div>
+              </div>
+              <button onClick={addBreak} disabled={!newBreak.label.trim()} className="mt-3 bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-40 transition">
+                Add break block
+              </button>
+            </div>
           </div>
         )}
       </div>

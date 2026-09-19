@@ -3,11 +3,21 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { api } from "@/lib/api";
-import { useForm } from "react-hook-form";
-import { ExternalLink, Copy, Check } from "lucide-react";
+import { ExternalLink, Copy, Check, Plus, Trash2, GripVertical } from "lucide-react";
 
-interface Registration { id: string; teamName: string; contactEmail: string; paymentStatus: string; amountDue: number; createdAt: string; }
-interface Tournament { id: string; slug: string; }
+interface FormField { id?: string; fieldKey: string; label: string; type: string; required: boolean; options?: string[]; orderIndex: number; }
+interface Registration { id: string; team?: { name: string } | null; formData: any; status: string; totalAmount: number; currency: string; reservedAt: string; }
+interface RegistrationSchema { id: string; isOpen: boolean; entryFee: number; currency: string; deadline: string | null; maxTeams: number | null; fields: FormField[]; }
+
+const FIELD_TYPES = ["TEXT", "NUMBER", "EMAIL", "SELECT", "CHECKBOX"] as const;
+const STATUS_COLORS: Record<string, string> = {
+  RESERVED: "bg-gray-100 text-gray-600",
+  PENDING_PAYMENT: "bg-yellow-100 text-yellow-700",
+  CONFIRMED: "bg-green-100 text-green-700",
+  EXPIRED: "bg-red-100 text-red-600",
+  WITHDRAWN: "bg-gray-100 text-gray-500",
+  REFUNDED: "bg-purple-100 text-purple-700",
+};
 
 export default function RegistrationPage() {
   const { id: tournamentId } = useParams<{ id: string }>();
@@ -15,42 +25,73 @@ export default function RegistrationPage() {
   const [saving, setSaving] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [entryFee, setEntryFee] = useState(0);
+  const [currency, setCurrency] = useState("ZAR");
+  const [deadline, setDeadline] = useState("");
+  const [maxTeams, setMaxTeams] = useState("");
+  const [fields, setFields] = useState<FormField[]>([]);
 
-  const { data: tournament } = useSWR<Tournament>(`/api/tournaments/${tournamentId}`, () => api.get(`/api/tournaments/${tournamentId}`));
-  const { data: schema, mutate: mutateSchema } = useSWR(`/api/tournaments/${tournamentId}/registration`, () => api.get(`/api/tournaments/${tournamentId}/registration`));
+  const { data: tournament } = useSWR(`/api/tournaments/${tournamentId}`, () => api.get(`/api/tournaments/${tournamentId}`));
+  const { data: schema, mutate: mutateSchema } = useSWR<RegistrationSchema>(`/api/tournaments/${tournamentId}/registration`, () => api.get(`/api/tournaments/${tournamentId}/registration`));
   const { data: registrations } = useSWR<Registration[]>(`/api/tournaments/${tournamentId}/registrations`, () => api.get(`/api/tournaments/${tournamentId}/registrations`));
 
   useEffect(() => {
     if (schema) {
       setIsOpen(schema.isOpen ?? false);
       setEntryFee(schema.entryFee ?? 0);
+      setCurrency(schema.currency ?? "ZAR");
+      setDeadline(schema.deadline ? schema.deadline.split("T")[0] : "");
+      setMaxTeams(schema.maxTeams ? String(schema.maxTeams) : "");
+      setFields((schema.fields ?? []).map((f, i) => ({ ...f, orderIndex: i })));
     }
   }, [schema]);
 
   const save = async () => {
     setSaving(true);
-    await api.put(`/api/tournaments/${tournamentId}/registration`, { isOpen, entryFee });
-    await mutateSchema();
-    setSaving(false);
+    try {
+      await api.put(`/api/tournaments/${tournamentId}/registration`, {
+        isOpen,
+        entryFee: Number(entryFee),
+        currency,
+        deadline: deadline || null,
+        maxTeams: maxTeams ? parseInt(maxTeams, 10) : null,
+        fields: fields.map((f, i) => ({ ...f, orderIndex: i })),
+      });
+      await mutateSchema();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addField = () => {
+    setFields((prev) => [...prev, {
+      fieldKey: `field_${Date.now()}`,
+      label: "",
+      type: "TEXT",
+      required: false,
+      orderIndex: prev.length,
+    }]);
+  };
+
+  const updateField = (idx: number, patch: Partial<FormField>) => {
+    setFields((prev) => prev.map((f, i) => i === idx ? { ...f, ...patch } : f));
+  };
+
+  const removeField = (idx: number) => {
+    setFields((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const copyLink = () => {
     if (!tournament?.slug) return;
-    const url = `${window.location.origin}/t/${tournament.slug}/register`;
-    navigator.clipboard.writeText(url);
+    navigator.clipboard.writeText(`${window.location.origin}/t/${tournament.slug}/register`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const statusColor: Record<string, string> = {
-    PENDING: "bg-yellow-100 text-yellow-700",
-    PAID: "bg-green-100 text-green-700",
-    REFUNDED: "bg-gray-100 text-gray-600",
-    FAILED: "bg-red-100 text-red-700",
-  };
+  const inputCls = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
 
   return (
     <div className="space-y-6 max-w-2xl">
+      {/* Settings */}
       <div className="bg-white border border-gray-200 rounded-2xl p-6">
         <h2 className="font-semibold text-gray-900 mb-4">Registration settings</h2>
         <div className="space-y-4">
@@ -61,21 +102,93 @@ export default function RegistrationPage() {
             </label>
             <span className="text-sm font-medium text-gray-700">{isOpen ? "Registration is open" : "Registration is closed"}</span>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Entry fee (USD)</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={entryFee}
-              onChange={(e) => setEntryFee(Number(e.target.value))}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-40"
-            />
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Entry fee</label>
+              <div className="flex gap-2">
+                <input type="number" min="0" value={entryFee} onChange={(e) => setEntryFee(Number(e.target.value))} className={`${inputCls} w-28`} />
+                <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={inputCls}>
+                  <option>ZAR</option><option>USD</option><option>EUR</option><option>GBP</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Max teams</label>
+              <input type="number" min="1" value={maxTeams} onChange={(e) => setMaxTeams(e.target.value)} placeholder="Unlimited" className={`${inputCls} w-32`} />
+            </div>
           </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Registration deadline</label>
+            <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} className={`${inputCls} w-44`} />
+          </div>
+
           <button onClick={save} disabled={saving} className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50 transition">
-            {saving ? "Saving..." : "Save"}
+            {saving ? "Saving..." : "Save settings"}
           </button>
         </div>
+      </div>
+
+      {/* Form builder */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-semibold text-gray-900">Registration form</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Fields teams fill in when registering</p>
+          </div>
+          <button onClick={addField} className="flex items-center gap-1.5 text-xs bg-brand-600 text-white px-3 py-1.5 rounded-lg hover:bg-brand-700 transition">
+            <Plus className="w-3.5 h-3.5" /> Add field
+          </button>
+        </div>
+
+        {fields.length === 0 ? (
+          <p className="text-sm text-gray-400 py-4 text-center">No custom fields. Teams will only submit their name and contact email.</p>
+        ) : (
+          <div className="space-y-3">
+            {fields.map((f, idx) => (
+              <div key={idx} className="flex items-start gap-3 bg-gray-50 rounded-xl p-3 border border-gray-100">
+                <GripVertical className="w-4 h-4 text-gray-300 mt-2.5 shrink-0" />
+                <div className="flex-1 grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Label</label>
+                    <input value={f.label} onChange={(e) => updateField(idx, { label: e.target.value, fieldKey: e.target.value.toLowerCase().replace(/\s+/g, "_") })}
+                      placeholder="e.g. Coach name" className={`${inputCls} w-full`} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Type</label>
+                    <select value={f.type} onChange={(e) => updateField(idx, { type: e.target.value })} className={`${inputCls} w-full`}>
+                      {FIELD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Required</label>
+                    <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                      <input type="checkbox" checked={f.required} onChange={(e) => updateField(idx, { required: e.target.checked })} className="rounded" />
+                      <span className="text-xs text-gray-600">Required</span>
+                    </label>
+                  </div>
+                  {f.type === "SELECT" && (
+                    <div className="col-span-3">
+                      <label className="block text-xs text-gray-500 mb-1">Options (comma separated)</label>
+                      <input value={(f.options ?? []).join(", ")} onChange={(e) => updateField(idx, { options: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })}
+                        placeholder="Option 1, Option 2, Option 3" className={`${inputCls} w-full`} />
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => removeField(idx)} className="text-gray-300 hover:text-red-500 transition mt-2">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {fields.length > 0 && (
+          <button onClick={save} disabled={saving} className="mt-4 bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50 transition">
+            {saving ? "Saving..." : "Save form"}
+          </button>
+        )}
       </div>
 
       {/* Registration link */}
@@ -101,22 +214,26 @@ export default function RegistrationPage() {
           <p className="text-sm text-gray-400">No registrations yet.</p>
         ) : (
           <div className="space-y-2">
-            {registrations.map((reg) => (
-              <div key={reg.id} className="flex items-center justify-between border border-gray-100 rounded-lg px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{reg.teamName}</p>
-                  <p className="text-xs text-gray-500">{reg.contactEmail}</p>
+            {registrations.map((reg) => {
+              const teamName = reg.team?.name ?? reg.formData?.team_name ?? reg.formData?.teamName ?? "Unknown";
+              const contactEmail = reg.formData?.contact_email ?? reg.formData?.email ?? "—";
+              return (
+                <div key={reg.id} className="flex items-center justify-between border border-gray-100 rounded-lg px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{teamName}</p>
+                    <p className="text-xs text-gray-500">{contactEmail}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {reg.totalAmount > 0 && (
+                      <span className="text-xs text-gray-500">{reg.currency} {(reg.totalAmount / 100).toFixed(2)}</span>
+                    )}
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[reg.status] ?? "bg-gray-100 text-gray-600"}`}>
+                      {reg.status.replace("_", " ")}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  {reg.amountDue > 0 && (
-                    <span className="text-xs text-gray-500">${reg.amountDue}</span>
-                  )}
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColor[reg.paymentStatus] ?? "bg-gray-100 text-gray-600"}`}>
-                    {reg.paymentStatus}
-                  </span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

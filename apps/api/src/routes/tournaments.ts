@@ -16,6 +16,9 @@ const updateSchema = z.object({
   sport: z.string().min(1).max(100).optional(),
   timezone: z.string().optional(),
   status: z.enum(["DRAFT", "ACTIVE", "COMPLETED", "CANCELLED"]).optional(),
+  description: z.string().optional(),
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
 });
 
 async function uniqueSlug(base: string): Promise<string> {
@@ -132,7 +135,11 @@ export async function tournamentRoutes(app: FastifyInstance) {
       const body = updateSchema.parse(request.body);
       const updated = await prisma.tournament.update({
         where: { id },
-        data: body,
+        data: {
+          ...body,
+          startDate: body.startDate ? new Date(body.startDate) : body.startDate === null ? null : undefined,
+          endDate: body.endDate ? new Date(body.endDate) : body.endDate === null ? null : undefined,
+        },
       });
 
       return reply.send({ success: true, data: updated });

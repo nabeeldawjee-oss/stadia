@@ -3,7 +3,7 @@ import { useParams } from "next/navigation";
 import { useRef, useState } from "react";
 import useSWR from "swr";
 import { api } from "@/lib/api";
-import { Plus, Users, ChevronDown, ChevronRight, Trash2, Pencil, Check, X, Upload, CreditCard, AlertCircle } from "lucide-react";
+import { Plus, Users, ChevronDown, ChevronRight, Trash2, Pencil, Check, X, Upload, AlertCircle, Link as LinkIcon } from "lucide-react";
 
 interface Player { id: string; name: string; number: number | null; position: string | null; dateOfBirth: string | null; }
 interface Team { id: string; name: string; logoUrl: string | null; paymentStatus: string; paymentAmount: number | null; players: Player[]; }
@@ -43,6 +43,7 @@ export default function TeamsPage() {
   const [paymentAmount, setPaymentAmount] = useState("");
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  const [copiedTeamId, setCopiedTeamId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { data: teams, mutate } = useSWR<Team[]>(
@@ -142,6 +143,14 @@ export default function TeamsPage() {
     } catch (err: any) { setImportError(err.message || "Import failed"); }
     setImporting(false);
     if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const copyTeamLink = async (teamId: string) => {
+    const res = await api.post<{ token: string }>(`/api/teams/${teamId}/token`, {});
+    const base = window.location.origin;
+    navigator.clipboard.writeText(`${base}/team?token=${res.token}`);
+    setCopiedTeamId(teamId);
+    setTimeout(() => setCopiedTeamId(null), 2000);
   };
 
   const paid = (teams ?? []).filter((t) => t.paymentStatus === "PAID").length;
@@ -245,6 +254,9 @@ export default function TeamsPage() {
                     </>
                   ) : (
                     <>
+                      <button onClick={(e) => { e.stopPropagation(); copyTeamLink(team.id); }} title="Copy team link" className="text-gray-400 hover:text-brand-600 p-1">
+                        {copiedTeamId === team.id ? <Check className="w-3.5 h-3.5 text-green-500" /> : <LinkIcon className="w-3.5 h-3.5" />}
+                      </button>
                       <button onClick={(e) => { e.stopPropagation(); setEditingTeamId(team.id); setEditTeamName(team.name); }} className="text-gray-400 hover:text-brand-600 p-1"><Pencil className="w-3.5 h-3.5" /></button>
                       <button onClick={(e) => { e.stopPropagation(); deleteTeam(team.id); }} className="text-gray-400 hover:text-red-500 p-1"><Trash2 className="w-4 h-4" /></button>
                     </>
