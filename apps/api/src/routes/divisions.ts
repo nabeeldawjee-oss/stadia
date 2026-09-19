@@ -338,6 +338,26 @@ export async function divisionRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: { created: matchData.length } });
   });
 
+  // Seed a team into a bracket slot
+  app.put("/api/bracket-slots/:slotId/seed", { preHandler: authenticate }, async (req, reply) => {
+    const { slotId } = req.params as { slotId: string };
+    const { teamId } = z.object({ teamId: z.string().nullable() }).parse(req.body);
+    const slot = await prisma.bracketSlot.findUnique({ where: { id: slotId } });
+    if (!slot) return reply.code(404).send({ success: false, error: "Slot not found" });
+    await prisma.bracketSlot.update({ where: { id: slotId }, data: { teamId } });
+    // Also update the match's homeTeamId / awayTeamId
+    const match = await prisma.match.findFirst({
+      where: slot.side === "HOME" ? { homeSlotId: slotId } : { awaySlotId: slotId },
+    });
+    if (match) {
+      await prisma.match.update({
+        where: { id: match.id },
+        data: slot.side === "HOME" ? { homeTeamId: teamId } : { awayTeamId: teamId },
+      });
+    }
+    return reply.send({ success: true });
+  });
+
   // Get bracket tree
   app.get("/api/brackets/:bracketId", { preHandler: authenticate }, async (req, reply) => {
     const { bracketId } = req.params as { bracketId: string };
