@@ -26,6 +26,7 @@ interface BracketDetail {
 export default function BracketView({ bracketId, tournamentId }: { bracketId: string; tournamentId?: string }) {
   const [scoring, setScoring] = useState<Match | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
   const { data: bracket, mutate } = useSWR<BracketDetail>(
     `/api/brackets/${bracketId}`,
     () => api.get(`/api/brackets/${bracketId}`)
@@ -42,11 +43,12 @@ export default function BracketView({ bracketId, tournamentId }: { bracketId: st
   if (bracket.matches.length === 0) {
     const generate = async () => {
       setGenerating(true);
+      setGenError(null);
       try {
         await api.post(`/api/brackets/${bracketId}/generate-matches`, {});
         await mutate();
       } catch (err: any) {
-        alert(err.message);
+        setGenError(err.message ?? "Failed to generate matches");
       } finally {
         setGenerating(false);
       }
@@ -54,6 +56,7 @@ export default function BracketView({ bracketId, tournamentId }: { bracketId: st
     return (
       <div className="text-center py-10 text-gray-400 text-sm space-y-3">
         <p>Bracket created. Generate match slots to start seeding teams.</p>
+        {genError && <p className="text-red-500 text-xs">{genError}</p>}
         <button
           onClick={generate}
           disabled={generating}
