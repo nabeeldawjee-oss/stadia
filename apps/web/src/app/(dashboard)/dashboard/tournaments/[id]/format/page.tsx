@@ -29,9 +29,9 @@ export default function FormatPage() {
   const addDivision = async () => {
     if (!divName.trim()) return;
     await api.post(`/api/tournaments/${tournamentId}/divisions`, { name: divName });
+    await mutate();
     setDivName("");
     setShowDiv(false);
-    await mutate();
   };
 
   const statusBadge: Record<string, string> = {

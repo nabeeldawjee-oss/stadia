@@ -201,8 +201,8 @@ export default function DivisionPage() {
   const addPhase = async () => {
     if (!phaseName.trim()) return;
     await api.post(`/api/divisions/${divisionId}/phases`, { name: phaseName, type: phaseType });
-    setPhaseName(""); setShowPhase(false);
     await mutate();
+    setPhaseName(""); setShowPhase(false);
   };
 
   const deletePhase = async (phaseId: string, name: string) => {

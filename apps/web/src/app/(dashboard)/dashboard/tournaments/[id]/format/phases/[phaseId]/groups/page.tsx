@@ -19,6 +19,11 @@ export default function GroupsPage() {
   const [legs, setLegs] = useState<1 | 2>(1);
   const [generating, setGenerating] = useState<string | null>(null);
 
+  const { data: phase } = useSWR<{ id: string; name: string; divisionId: string }>(
+    `/api/phases/${phaseId}`,
+    () => api.get(`/api/phases/${phaseId}`)
+  );
+
   const { data: groups, mutate } = useSWR<Group[]>(
     `/api/phases/${phaseId}/groups`,
     () => api.get(`/api/phases/${phaseId}/groups`)
@@ -27,8 +32,8 @@ export default function GroupsPage() {
   const addGroup = async () => {
     if (!groupName.trim()) return;
     await api.post(`/api/phases/${phaseId}/groups`, { name: groupName, legs });
-    setGroupName(""); setShowGroup(false);
     await mutate();
+    setGroupName(""); setShowGroup(false);
   };
 
   const generateMatches = async (groupId: string) => {
@@ -46,7 +51,9 @@ export default function GroupsPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
-        <button onClick={() => router.back()} className="hover:text-gray-700">← Back</button>
+        <button onClick={() => router.push(`/dashboard/tournaments/${tournamentId}/format/divisions/${phase?.divisionId}`)} className="hover:text-gray-700 disabled:pointer-events-none">
+          ← {phase?.name ?? "Phase"}
+        </button>
       </div>
 
       <div className="flex items-center justify-between">
