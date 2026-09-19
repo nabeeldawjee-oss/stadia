@@ -172,4 +172,138 @@ export async function tournamentRoutes(app: FastifyInstance) {
       return reply.send({ success: true, data: null });
     }
   );
+
+  // Phase progress — match counts per phase across all divisions
+  app.get(
+    "/api/tournaments/:id/progress",
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      await assertTournamentAccess(request.userId!, id, "view_only");
+
+      const divisions = await prisma.division.findMany({
+        where: { tournamentId: id },
+        include: {
+          phases: {
+            include: {
+              groups: {
+                include: {
+                  matches: { select: { id: true, status: true } },
+                },
+              },
+              brackets: {
+                include: {
+                  matches: { select: { id: true, status: true } },
+                },
+              },
+            },
+            orderBy: { orderIndex: "asc" },
+          },
+        },
+        orderBy: { orderIndex: "asc" },
+      });
+
+      const result = divisions.flatMap((division) =>
+        division.phases.map((phase, i) => {
+          const groupMatches = phase.groups.flatMap((g) => g.matches);
+          const bracketMatches = phase.brackets.flatMap((b) => b.matches);
+          const all = [...groupMatches, ...bracketMatches];
+          return {
+            id: phase.id,
+            name: phase.name,
+            type: phase.type,
+            status: phase.status,
+            totalMatches: all.length,
+            completedMatches: all.filter((m) => m.status === "COMPLETED").length,
+            nextPhaseId: division.phases[i + 1]?.id ?? null,
+            divisionName: division.name,
+          };
+        })
+      );
+
+      return reply.send({ success: true, data: result });
+    }
+  );
+
+  // Tournament ranking — derived from knockout bracket results
+  app.get(
+    "/api/tournaments/:id/ranking",
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      await assertTournamentAccess(request.userId!, id, "view_only");
+
+      const divisions = await prisma.division.findMany({
+        where: { tournamentId: id },
+        include: {
+          phases: {
+            where: { type: "KNOCKOUT" },
+            include: {
+              brackets: {
+                include: {
+                  matches: {
+                    where: { status: "COMPLETED" },
+                    include: { homeTeam: true, awayTeam: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      type RankEntry = { rank: number; team: { id: string; name: string }; label: string };
+      const rankings: RankEntry[] = [];
+
+      for (const division of divisions) {
+        for (const phase of division.phases) {
+          for (const bracket of phase.brackets) {
+            if (bracket.matches.length === 0) continue;
+
+            const byRound: Record<number, typeof bracket.matches> = {};
+            for (const m of bracket.matches) {
+              const r = m.roundNumber ?? 1;
+              if (!byRound[r]) byRound[r] = [];
+              byRound[r].push(m);
+            }
+
+            const maxRound = Math.max(...Object.keys(byRound).map(Number));
+            let rank = 1;
+
+            for (let r = maxRound; r >= 1; r--) {
+              const matches = byRound[r] ?? [];
+              const roundsFromFinal = maxRound - r;
+
+              if (roundsFromFinal === 0) {
+                for (const m of matches) {
+                  if (m.homeScore === null || m.awayScore === null) continue;
+                  const winner = m.homeScore >= m.awayScore ? m.homeTeam : m.awayTeam;
+                  const loser = m.homeScore >= m.awayScore ? m.awayTeam : m.homeTeam;
+                  if (winner) rankings.push({ rank: 1, team: { id: winner.id, name: winner.name }, label: "Champion" });
+                  if (loser) rankings.push({ rank: 2, team: { id: loser.id, name: loser.name }, label: "Runner-up" });
+                }
+                rank = 3;
+              } else {
+                const label =
+                  roundsFromFinal === 1
+                    ? "3rd – 4th Place"
+                    : `Top ${rank} – ${rank + matches.length - 1}`;
+                for (const m of matches) {
+                  if (m.homeScore === null || m.awayScore === null) continue;
+                  const loser = m.homeScore >= m.awayScore ? m.awayTeam : m.homeTeam;
+                  if (loser) rankings.push({ rank, team: { id: loser.id, name: loser.name }, label });
+                }
+                rank += matches.length;
+              }
+            }
+          }
+        }
+      }
+
+      return reply.send({
+        success: true,
+        data: rankings.sort((a, b) => a.rank - b.rank),
+      });
+    }
+  );
 }

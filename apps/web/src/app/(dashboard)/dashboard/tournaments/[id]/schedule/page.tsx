@@ -639,7 +639,7 @@ export default function SchedulePage() {
       {scoringMatch && (
         <ScoreEntryModal
           match={scoringMatch}
-          tournamentId={id}
+          tournamentId={tournamentId}
           isOverride={scoringMatch.status === "COMPLETED"}
           onClose={() => setScoringMatch(null)}
           onSaved={() => { setScoringMatch(null); mutateScheduled(); }}
