@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["apps/web/node_modules/.bin/next", "dev", "--port", "3000"],
+      "port": 3000
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["apps/api/node_modules/.bin/ts-node-dev", "--respawn", "--transpile-only", "apps/api/src/index.ts"],
+      "port": 4000
+    }
+  ]
+}

@@ -29,9 +29,14 @@ export async function generateBracketSlots(bracketId: string): Promise<void> {
     }
   }
 
+  // Third-place match: extra slot pair at position 2 in the Final round
+  if (bracket.thirdPlaceMatch && rounds >= 2) {
+    slotData.push({ bracketId, roundNumber: rounds, position: 2, side: "HOME" });
+    slotData.push({ bracketId, roundNumber: rounds, position: 2, side: "AWAY" });
+  }
+
   await prisma.bracketSlot.createMany({ data: slotData });
 
-  // Create one Match per (round, position) pair, linking the two slots
   const createdSlots = await prisma.bracketSlot.findMany({
     where: { bracketId },
     orderBy: [{ roundNumber: "asc" }, { position: "asc" }, { side: "asc" }],
@@ -52,15 +57,17 @@ export async function generateBracketSlots(bracketId: string): Promise<void> {
       const homeSlot = createdSlots.find(s => s.roundNumber === round && s.position === pos && s.side === "HOME");
       const awaySlot = createdSlots.find(s => s.roundNumber === round && s.position === pos && s.side === "AWAY");
       if (homeSlot && awaySlot) {
-        matchData.push({
-          tournamentId,
-          contextType: "BRACKET",
-          bracketId,
-          roundNumber: round,
-          homeSlotId: homeSlot.id,
-          awaySlotId: awaySlot.id,
-        });
+        matchData.push({ tournamentId, contextType: "BRACKET", bracketId, roundNumber: round, homeSlotId: homeSlot.id, awaySlotId: awaySlot.id });
       }
+    }
+  }
+
+  // Third-place match entry
+  if (bracket.thirdPlaceMatch && rounds >= 2) {
+    const homeSlot = createdSlots.find(s => s.roundNumber === rounds && s.position === 2 && s.side === "HOME");
+    const awaySlot = createdSlots.find(s => s.roundNumber === rounds && s.position === 2 && s.side === "AWAY");
+    if (homeSlot && awaySlot) {
+      matchData.push({ tournamentId, contextType: "BRACKET", bracketId, roundNumber: rounds, homeSlotId: homeSlot.id, awaySlotId: awaySlot.id });
     }
   }
 

@@ -12,8 +12,30 @@ export async function advanceBracketWinner(matchId: string): Promise<void> {
 
   const winnerId =
     match.homeScore > match.awayScore ? match.homeTeamId : match.awayTeamId;
+  const loserId =
+    match.homeScore > match.awayScore ? match.awayTeamId : match.homeTeamId;
 
   const maxRound = bracketRounds(match.bracket.size);
+
+  // Third-place: SF losers (round maxRound-1) seed into 3rd-place slot if enabled
+  if (match.bracket.thirdPlaceMatch && match.roundNumber === maxRound - 1 && loserId) {
+    const thirdSlot = await prisma.bracketSlot.findFirst({
+      where: { bracketId: match.bracketId!, roundNumber: maxRound, position: 2, side: nextPosition(match.homeSlot.position) % 2 === 1 ? "HOME" : "AWAY" },
+    });
+    if (thirdSlot) {
+      await prisma.bracketSlot.update({ where: { id: thirdSlot.id }, data: { teamId: loserId } });
+      const thirdMatch = await prisma.match.findFirst({
+        where: { bracketId: match.bracketId!, roundNumber: maxRound, ...(thirdSlot.side === "HOME" ? { homeSlotId: thirdSlot.id } : { awaySlotId: thirdSlot.id }) },
+      });
+      if (thirdMatch) {
+        await prisma.match.update({
+          where: { id: thirdMatch.id },
+          data: thirdSlot.side === "HOME" ? { homeTeamId: loserId } : { awayTeamId: loserId },
+        });
+      }
+    }
+  }
+
   if (match.roundNumber! >= maxRound) return; // Final — nothing to advance
 
   const nextRound = match.roundNumber! + 1;

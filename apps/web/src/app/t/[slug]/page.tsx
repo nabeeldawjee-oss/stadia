@@ -50,7 +50,82 @@ interface ScheduledMatch {
   match: { homeTeam: { name: string } | null; awayTeam: { name: string } | null; homeScore: number | null; awayScore: number | null; status: string };
 }
 
-type Tab = "standings" | "fixtures" | "results";
+type Tab = "standings" | "fixtures" | "results" | "bracket";
+
+function PublicBracket({ bracket, primary }: { bracket: Bracket; primary: string }) {
+  const totalRounds = Math.log2(bracket.size);
+  const rounds = Array.from({ length: totalRounds }, (_, i) => i + 1);
+
+  const matchByRound: Record<number, Match[]> = {};
+  for (const m of bracket.matches) {
+    const r = m.roundNumber ?? 1;
+    if (!matchByRound[r]) matchByRound[r] = [];
+    matchByRound[r].push(m);
+  }
+
+  const roundLabel = (r: number) => {
+    const rem = totalRounds - r + 1;
+    if (rem === 1) return "Final";
+    if (rem === 2) return "Semi-finals";
+    if (rem === 3) return "Quarter-finals";
+    return `Round ${r}`;
+  };
+
+  const slotMap: Record<string, typeof bracket.slots[0]> = {};
+  for (const s of bracket.slots) slotMap[`${s.roundNumber}-${s.position}-HOME`] = s;
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="flex gap-4 min-w-max pb-2 pt-1">
+        {rounds.map((r) => {
+          const isLast = r === totalRounds;
+          const matchesInRound = bracket.size / Math.pow(2, r);
+          const matches = matchByRound[r] ?? [];
+          const cards = matches.length > 0 ? matches : Array.from({ length: matchesInRound }, (_, i) => ({
+            id: `ph-${r}-${i}`, roundNumber: r, homeTeam: null, awayTeam: null,
+            homeScore: null, awayScore: null, status: "PENDING",
+          } as Match));
+
+          return (
+            <div key={r} className="flex flex-col gap-3" style={{ minWidth: 200 }}>
+              <div className="text-center">
+                <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full ${isLast ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-500"}`}>
+                  {roundLabel(r)}
+                </span>
+              </div>
+              <div className="flex flex-col gap-2 flex-1 justify-around">
+                {cards.map((m) => {
+                  const hasScore = m.homeScore !== null;
+                  const homeWins = hasScore && m.homeScore! > m.awayScore!;
+                  const awayWins = hasScore && m.awayScore! > m.homeScore!;
+                  return (
+                    <div key={m.id} className={`rounded-xl border overflow-hidden ${isLast ? "border-yellow-200" : "border-gray-200"}`}>
+                      {[{ team: m.homeTeam, score: m.homeScore, wins: homeWins }, { team: m.awayTeam, score: m.awayScore, wins: awayWins }].map((row, i) => (
+                        <div key={i} className={`flex items-center justify-between px-3 py-2 ${i === 1 ? "border-t border-gray-100" : ""} ${row.wins ? (isLast ? "bg-yellow-50" : "bg-green-50") : ""}`}>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {row.wins && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: row.wins ? primary : undefined }} />}
+                            <span className={`text-xs truncate max-w-[130px] ${row.wins ? "font-bold" : hasScore ? "text-gray-400" : "text-gray-600"}`} style={row.wins && !isLast ? { color: primary } : {}}>
+                              {row.team?.name ?? <em className="text-gray-300 not-italic">TBD</em>}
+                            </span>
+                          </div>
+                          {row.score !== null && (
+                            <span className={`text-sm font-black ml-2 ${row.wins ? "" : "text-gray-300"}`} style={row.wins && !isLast ? { color: primary } : {}}>
+                              {row.score}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function fmt(iso: string) {
   return new Date(iso).toLocaleString("en-ZA", { hour: "2-digit", minute: "2-digit", weekday: "short", day: "numeric", month: "short", hour12: false });
@@ -93,6 +168,8 @@ export default function PublicTournamentPage() {
 
   const primary = tournament.branding?.primaryColor || "#16a34a";
   const division = tournament.divisions.find((d) => d.id === activeDivision);
+  const allBrackets = tournament.divisions.flatMap(d => d.phases.filter(p => p.type === "KNOCKOUT").flatMap(p => p.brackets));
+  const hasKnockout = allBrackets.length > 0;
 
   // Group schedule by date
   const byDate: Record<string, ScheduledMatch[]> = {};
@@ -126,7 +203,7 @@ export default function PublicTournamentPage() {
       {/* Tabs */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 flex gap-0">
-          {(["standings", "fixtures", "results"] as Tab[]).map((t) => (
+          {(["standings", "fixtures", "results", ...(hasKnockout ? ["bracket" as Tab] : [])] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -200,11 +277,18 @@ export default function PublicTournamentPage() {
                   </div>
                 ))}
                 {phase.type === "KNOCKOUT" && phase.brackets.map((bracket) => (
-                  <div key={bracket.id} className="text-sm text-gray-500 px-1">
-                    Knockout bracket ({bracket.size} teams)
-                  </div>
+                  <PublicBracket key={bracket.id} bracket={bracket} primary={primary} />
                 ))}
               </div>
+            ))}
+          </div>
+        )}
+
+        {/* BRACKET TAB */}
+        {tab === "bracket" && (
+          <div className="space-y-6">
+            {allBrackets.map((bracket) => (
+              <PublicBracket key={bracket.id} bracket={bracket} primary={primary} />
             ))}
           </div>
         )}

@@ -35,7 +35,12 @@ export default function BracketView({ bracketId, tournamentId }: { bracketId: st
     tournamentId ? `/api/tournaments/${tournamentId}/teams` : null,
     () => api.get(`/api/tournaments/${tournamentId}/teams`)
   );
+  const { data: qualifiersData } = useSWR<{ label: string; team: Team }[]>(
+    `/api/brackets/${bracketId}/qualifiers`,
+    () => api.get(`/api/brackets/${bracketId}/qualifiers`)
+  );
   const allTeams: Team[] = teamsData ?? [];
+  const qualifiers: { label: string; team: Team }[] = qualifiersData ?? [];
 
   if (!bracket) {
     return (
@@ -113,7 +118,8 @@ export default function BracketView({ bracketId, tournamentId }: { bracketId: st
     await mutate();
   };
 
-  const roundLabel = (r: number) => {
+  const roundLabel = (r: number, pos?: number) => {
+    if (pos === 2) return "3rd Place";
     const remaining = totalRounds - r + 1;
     if (remaining === 1) return "Final";
     if (remaining === 2) return "Semi-finals";
@@ -155,14 +161,17 @@ export default function BracketView({ bracketId, tournamentId }: { bracketId: st
                   const pos = idx + 1;
                   const homeSlot = slotMap[`${r}-${pos}-HOME`];
                   const awaySlot = slotMap[`${r}-${pos}-AWAY`];
+                  const isThirdPlace = isLast && pos === 2;
                   return (
                     <MatchCard
                       key={match.id}
                       match={match}
-                      isFinal={isLast}
+                      isFinal={isLast && !isThirdPlace}
+                      isThirdPlace={isThirdPlace}
                       homeSlot={homeSlot}
                       awaySlot={awaySlot}
                       allTeams={allTeams}
+                      qualifiers={qualifiers}
                       seededIds={seededIds}
                       onScore={() => match.homeTeam && match.awayTeam && setScoring(match)}
                       onSeed={seedSlot}
@@ -191,18 +200,22 @@ export default function BracketView({ bracketId, tournamentId }: { bracketId: st
 function MatchCard({
   match,
   isFinal,
+  isThirdPlace,
   homeSlot,
   awaySlot,
   allTeams,
+  qualifiers,
   seededIds,
   onScore,
   onSeed,
 }: {
   match: Match;
   isFinal: boolean;
+  isThirdPlace?: boolean;
   homeSlot?: BracketSlot;
   awaySlot?: BracketSlot;
   allTeams: Team[];
+  qualifiers: { label: string; team: Team }[];
   seededIds: Set<string>;
   onScore: () => void;
   onSeed: (slotId: string, teamId: string | null) => Promise<void>;
@@ -216,16 +229,23 @@ function MatchCard({
   return (
     <div
       className={`rounded-xl overflow-hidden border transition-all ${
-        isFinal ? "border-yellow-200 shadow-md shadow-yellow-100/50" : "border-gray-200"
+        isFinal
+          ? "border-yellow-200 shadow-md shadow-yellow-100/50"
+          : isThirdPlace
+          ? "border-orange-200 shadow-sm shadow-orange-100/50"
+          : "border-gray-200"
       }`}
     >
       <SlotRow
         team={match.homeTeam}
         score={match.homeScore}
         isWinner={homeWins}
+        hasScore={hasScore}
         isFinal={isFinal}
+        isThirdPlace={isThirdPlace}
         slot={homeSlot}
         allTeams={allTeams}
+        qualifiers={qualifiers}
         seededIds={seededIds}
         onSeed={onSeed}
       />
@@ -234,9 +254,12 @@ function MatchCard({
         team={match.awayTeam}
         score={match.awayScore}
         isWinner={awayWins}
+        hasScore={hasScore}
         isFinal={isFinal}
+        isThirdPlace={isThirdPlace}
         slot={awaySlot}
         allTeams={allTeams}
+        qualifiers={qualifiers}
         seededIds={seededIds}
         onSeed={onSeed}
       />
@@ -259,24 +282,34 @@ function SlotRow({
   team,
   score,
   isWinner,
+  hasScore,
   isFinal,
+  isThirdPlace,
   slot,
   allTeams,
+  qualifiers,
   seededIds,
   onSeed,
 }: {
   team: Team | null;
   score: number | null;
   isWinner: boolean;
+  hasScore: boolean;
   isFinal: boolean;
+  isThirdPlace?: boolean;
   slot?: BracketSlot;
   allTeams: Team[];
+  qualifiers: { label: string; team: Team }[];
   seededIds: Set<string>;
   onSeed: (slotId: string, teamId: string | null) => Promise<void>;
 }) {
   const [seeding, setSeeding] = useState(false);
   const [open, setOpen] = useState(false);
-  const available = allTeams.filter(t => !seededIds.has(t.id) || t.id === team?.id);
+  // Show qualifiers if available, otherwise fall back to all teams
+  const isLoser = hasScore && !isWinner;
+  const seedOptions = qualifiers.length > 0
+    ? qualifiers.filter(q => !seededIds.has(q.team.id) || q.team.id === team?.id)
+    : allTeams.filter(t => !seededIds.has(t.id) || t.id === team?.id).map(t => ({ label: t.name, team: t }));
 
   const handleSeed = async (teamId: string | null) => {
     if (!slot) return;
@@ -285,18 +318,20 @@ function SlotRow({
     try { await onSeed(slot.id, teamId); } finally { setSeeding(false); }
   };
 
+  const winnerColor = isThirdPlace ? "bg-orange-50" : isFinal ? "bg-yellow-50" : "bg-brand-50";
+  const dotColor = isThirdPlace ? "bg-orange-400" : isFinal ? "bg-yellow-400" : "bg-brand-500";
+  const scoreColor = isThirdPlace ? "text-orange-600" : isFinal ? "text-yellow-700" : "text-brand-700";
+  const nameColor = isWinner
+    ? isThirdPlace ? "font-bold text-orange-800" : isFinal ? "font-bold text-yellow-800" : "font-bold text-brand-700"
+    : isLoser ? "text-gray-400"
+    : "text-gray-700";
+
   return (
-    <div className={`flex items-center justify-between px-3 py-2.5 min-h-[42px] ${
-      isWinner ? (isFinal ? "bg-yellow-50" : "bg-brand-50") : ""
-    }`}>
+    <div className={`flex items-center justify-between px-3 py-2.5 min-h-[42px] ${isWinner ? winnerColor : ""}`}>
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        {isWinner && (
-          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isFinal ? "bg-yellow-400" : "bg-brand-500"}`} />
-        )}
+        {isWinner && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />}
         {team ? (
-          <span className={`text-xs truncate max-w-[140px] ${
-            isWinner ? (isFinal ? "font-bold text-yellow-800" : "font-bold text-brand-700") : "text-gray-700"
-          }`}>
+          <span className={`text-xs truncate max-w-[140px] ${nameColor}`}>
             {team.name}
           </span>
         ) : slot ? (
@@ -305,14 +340,14 @@ function SlotRow({
               <div className="flex items-center gap-1">
                 <select
                   autoFocus
-                  className="text-xs border border-gray-200 rounded px-1 py-0.5 bg-white text-gray-700 max-w-[150px]"
+                  className="text-xs border border-gray-200 rounded px-1 py-0.5 bg-white text-gray-700 max-w-[160px]"
                   defaultValue=""
                   onChange={e => handleSeed(e.target.value || null)}
                   onBlur={() => setOpen(false)}
                 >
                   <option value="" disabled>Pick team…</option>
-                  {available.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
+                  {seedOptions.map(opt => (
+                    <option key={opt.team.id} value={opt.team.id}>{opt.label}</option>
                   ))}
                 </select>
                 <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600">
@@ -335,13 +370,11 @@ function SlotRow({
         )}
       </div>
       {score !== null && (
-        <span className={`text-sm font-black ml-2 shrink-0 ${
-          isWinner ? (isFinal ? "text-yellow-700" : "text-brand-700") : "text-gray-400"
-        }`}>
+        <span className={`text-sm font-black ml-2 shrink-0 ${isWinner ? scoreColor : "text-gray-400"}`}>
           {score}
         </span>
       )}
-      {team && slot && !score && (
+      {team && slot && score === null && (
         <button
           onClick={() => handleSeed(null)}
           disabled={seeding}

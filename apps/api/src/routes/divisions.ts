@@ -6,6 +6,12 @@ import { assertTournamentAccess } from "../engines/auth/permissions";
 import { generateGroupMatches } from "../engines/format/generate-matches";
 import { generateBracketSlots } from "../engines/format/generate-bracket";
 
+function ordinal(n: number) {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] ?? s[v] ?? s[0]);
+}
+
 const divisionSchema = z.object({
   name: z.string().min(1).max(100),
   orderIndex: z.number().int().optional(),
@@ -359,6 +365,50 @@ export async function divisionRoutes(app: FastifyInstance) {
   });
 
   // Get bracket tree
+  // Get group-stage qualifiers available to seed into this bracket
+  app.get("/api/brackets/:bracketId/qualifiers", { preHandler: authenticate }, async (req, reply) => {
+    const { bracketId } = req.params as { bracketId: string };
+    const bracket = await prisma.bracket.findUnique({
+      where: { id: bracketId },
+      include: {
+        phase: {
+          include: {
+            division: {
+              include: {
+                phases: {
+                  where: { type: "GROUP_STAGE" },
+                  include: {
+                    groups: {
+                      include: {
+                        standings: { include: { team: true }, orderBy: { position: "asc" } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!bracket) return reply.code(404).send({ success: false, error: "Not found" });
+
+    const qualifiers: { label: string; team: { id: string; name: string } }[] = [];
+    for (const phase of bracket.phase.division.phases) {
+      for (const group of phase.groups) {
+        for (const standing of group.standings) {
+          if (standing.team) {
+            qualifiers.push({
+              label: `${ordinal(standing.position)} — ${group.name}`,
+              team: { id: standing.team.id, name: standing.team.name },
+            });
+          }
+        }
+      }
+    }
+    return reply.send({ success: true, data: qualifiers });
+  });
+
   app.get("/api/brackets/:bracketId", { preHandler: authenticate }, async (req, reply) => {
     const { bracketId } = req.params as { bracketId: string };
     const bracket = await prisma.bracket.findUnique({

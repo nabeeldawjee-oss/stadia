@@ -95,6 +95,16 @@ export async function scoreRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: updated });
   });
 
+  // Delete a match (organizer only — for orphan cleanup)
+  app.delete("/api/matches/:matchId", { preHandler: authenticate }, async (req, reply) => {
+    const { matchId } = req.params as { matchId: string };
+    const match = await prisma.match.findUnique({ where: { id: matchId } });
+    if (!match) return reply.code(404).send({ success: false, error: "Not found" });
+    await assertTournamentAccess(req.userId!, match.tournamentId, "manage_general");
+    await prisma.match.delete({ where: { id: matchId } });
+    return reply.send({ success: true, data: null });
+  });
+
   // Score override log
   app.get("/api/matches/:matchId/score-log", { preHandler: authenticate }, async (req, reply) => {
     const { matchId } = req.params as { matchId: string };

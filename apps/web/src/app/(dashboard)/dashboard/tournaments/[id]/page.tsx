@@ -2,7 +2,7 @@
 import { useParams } from "next/navigation";
 import useSWR, { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
-import { Users, GitBranch, Calendar, Trophy, Clock, MapPin, Pencil, CheckCircle, PlayCircle, BarChart2, ChevronRight } from "lucide-react";
+import { Users, GitBranch, Calendar, Trophy, Clock, MapPin, Pencil, CheckCircle, PlayCircle, BarChart2, ChevronRight, Globe } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import ScoreEntryModal from "@/components/ScoreEntryModal";
 import PhaseTransitionModal from "@/components/PhaseTransitionModal";
@@ -69,6 +69,17 @@ export default function TournamentOverviewPage() {
 
   const [scoringMatch, setScoringMatch] = useState<{ id: string; homeTeam: { id: string; name: string } | null; awayTeam: { id: string; name: string } | null; status: string } | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [publishing, setPublishing] = useState(false);
+
+  const publish = async () => {
+    setPublishing(true);
+    try {
+      await api.put(`/api/tournaments/${id}`, { status: "ACTIVE" });
+      globalMutate(`/api/tournaments/${id}`);
+    } finally {
+      setPublishing(false);
+    }
+  };
   const [transitionPhaseId, setTransitionPhaseId] = useState<string | null>(null);
   const [showRanking, setShowRanking] = useState(false);
   const dismissedRef = useRef<Set<string>>(new Set());
@@ -159,6 +170,16 @@ export default function TournamentOverviewPage() {
             )}
           </div>
           <div className="flex items-center gap-3 ml-4">
+            {t.status === "DRAFT" && (
+              <button
+                onClick={publish}
+                disabled={publishing}
+                className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white text-sm font-semibold rounded-xl hover:bg-brand-700 transition shadow-sm disabled:opacity-50"
+              >
+                <Globe className="w-4 h-4" />
+                {publishing ? "Publishing…" : "Publish"}
+              </button>
+            )}
             {isComplete && (
               <button
                 onClick={() => setShowRanking(true)}
