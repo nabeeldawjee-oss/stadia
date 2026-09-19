@@ -2,7 +2,7 @@
 import { useParams } from "next/navigation";
 import useSWR, { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
-import { Users, GitBranch, Calendar, Trophy, Clock, MapPin, Pencil, CheckCircle, PlayCircle, BarChart2, ChevronRight, Globe } from "lucide-react";
+import { Users, GitBranch, Calendar, Trophy, Clock, MapPin, Pencil, CheckCircle, PlayCircle, BarChart2, ChevronRight, Globe, X } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import ScoreEntryModal from "@/components/ScoreEntryModal";
 import PhaseTransitionModal from "@/components/PhaseTransitionModal";
@@ -70,12 +70,43 @@ export default function TournamentOverviewPage() {
   const [scoringMatch, setScoringMatch] = useState<{ id: string; homeTeam: { id: string; name: string } | null; awayTeam: { id: string; name: string } | null; status: string } | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editStart, setEditStart] = useState("");
+  const [editEnd, setEditEnd] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const openEdit = () => {
+    if (!t) return;
+    setEditName(t.name);
+    setEditDesc(t.description ?? "");
+    setEditStart(t.startDate ? t.startDate.split("T")[0] : "");
+    setEditEnd(t.endDate ? t.endDate.split("T")[0] : "");
+    setEditOpen(true);
+  };
+
+  const saveEdit = async () => {
+    setSaving(true);
+    try {
+      await api.put(`/api/tournaments/${id}`, {
+        name: editName,
+        description: editDesc || null,
+        startDate: editStart || null,
+        endDate: editEnd || null,
+      });
+      await globalMutate(`/api/tournaments/${id}`);
+      setEditOpen(false);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const publish = async () => {
     setPublishing(true);
     try {
       await api.put(`/api/tournaments/${id}`, { status: "ACTIVE" });
-      globalMutate(`/api/tournaments/${id}`);
+      await globalMutate(`/api/tournaments/${id}`);
     } finally {
       setPublishing(false);
     }
@@ -170,6 +201,13 @@ export default function TournamentOverviewPage() {
             )}
           </div>
           <div className="flex items-center gap-3 ml-4">
+            <button
+              onClick={openEdit}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
+              title="Edit tournament"
+            >
+              <Pencil className="w-4 h-4" />
+            </button>
             {t.status === "DRAFT" && (
               <button
                 onClick={publish}
@@ -430,6 +468,60 @@ export default function TournamentOverviewPage() {
           tournamentId={id}
           onClose={() => setShowRanking(false)}
         />
+      )}
+
+      {/* Quick edit modal */}
+      {editOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-900">Edit tournament</h2>
+              <button onClick={() => setEditOpen(false)} className="text-gray-400 hover:text-gray-700">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                <input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  rows={2}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Start date</label>
+                  <input type="date" value={editStart} onChange={(e) => setEditStart(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">End date</label>
+                  <input type="date" value={editEnd} onChange={(e) => setEditEnd(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                </div>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex gap-3 justify-end">
+              <button onClick={() => setEditOpen(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50">
+                Cancel
+              </button>
+              <button onClick={saveEdit} disabled={saving || !editName.trim()}
+                className="px-4 py-2 text-sm font-semibold bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:opacity-50 transition">
+                {saving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

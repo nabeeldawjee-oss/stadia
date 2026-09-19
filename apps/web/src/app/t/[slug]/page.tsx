@@ -18,6 +18,7 @@ interface Standing {
 }
 interface Match {
   id: string;
+  roundNumber?: number | null;
   homeTeam: { name: string } | null;
   awayTeam: { name: string } | null;
   homeScore: number | null;

@@ -1,7 +1,7 @@
 "use client";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect } from "react";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -27,6 +27,7 @@ interface Tournament {
 export default function SettingsPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { mutate: globalMutate } = useSWRConfig();
   const { data: t, mutate } = useSWR<Tournament>(`/api/tournaments/${id}`, () => api.get(`/api/tournaments/${id}`));
 
   const { register, handleSubmit, reset, formState: { isSubmitting, errors, isDirty } } = useForm<FormValues>({
@@ -52,6 +53,7 @@ export default function SettingsPage() {
       endDate: values.endDate || null,
     });
     await mutate();
+    await globalMutate(`/api/tournaments/${id}`);
   };
 
   const handleDelete = async () => {

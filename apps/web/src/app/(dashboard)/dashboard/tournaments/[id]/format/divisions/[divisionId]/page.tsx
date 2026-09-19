@@ -3,7 +3,8 @@ import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import useSWR from "swr";
 import { api } from "@/lib/api";
-import { Plus, ChevronRight, ArrowRightCircle, Trash2, CheckCircle, AlertTriangle, X } from "lucide-react";
+import { Plus, ChevronRight, ArrowRightCircle, Trash2, CheckCircle, AlertTriangle, X, ChevronDown } from "lucide-react";
+import BracketView from "@/components/BracketView";
 
 interface Group { id: string; name: string; }
 interface Bracket { id: string; size: number; }
@@ -167,6 +168,7 @@ export default function DivisionPage() {
   const [advancing, setAdvancing] = useState<string | null>(null);
   const [previewPhase, setPreviewPhase] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [expandedBracketPhaseId, setExpandedBracketPhaseId] = useState<string | null>(null);
   const [matchDuration, setMatchDuration] = useState("");
   const [halfDuration, setHalfDuration] = useState("");
   const [savingDurations, setSavingDurations] = useState(false);
@@ -335,10 +337,11 @@ export default function DivisionPage() {
                   )}
                   {phase.type === "KNOCKOUT" && (
                     <button
-                      onClick={() => router.push(`/dashboard/tournaments/${tournamentId}/format/phases/${phase.id}/bracket`)}
+                      onClick={() => setExpandedBracketPhaseId(expandedBracketPhaseId === phase.id ? null : phase.id)}
                       className="text-xs text-brand-600 hover:underline flex items-center gap-1"
                     >
-                      Bracket <ChevronRight className="w-3 h-3" />
+                      Bracket
+                      <ChevronDown className={`w-3 h-3 transition-transform ${expandedBracketPhaseId === phase.id ? "rotate-180" : ""}`} />
                     </button>
                   )}
                   {/* Delete — only PENDING phases */}
@@ -359,6 +362,10 @@ export default function DivisionPage() {
                   ? `${phase.groups?.length ?? 0} group(s)`
                   : `${phase.brackets?.length ?? 0} bracket(s)`}
               </div>
+              {/* Inline bracket panel */}
+              {phase.type === "KNOCKOUT" && expandedBracketPhaseId === phase.id && (
+                <InlineBracket phaseId={phase.id} tournamentId={tournamentId} />
+              )}
             </div>
           ))}
         </div>
@@ -371,6 +378,51 @@ export default function DivisionPage() {
           onClose={() => setPreviewPhase(null)}
           onConfirm={(force) => confirmAdvance(previewPhase.id, force)}
         />
+      )}
+    </div>
+  );
+}
+
+function InlineBracket({ phaseId, tournamentId }: { phaseId: string; tournamentId: string }) {
+  const [creating, setCreating] = useState(false);
+  const [size, setSize] = useState(8);
+  const { data: phase, mutate } = useSWR<{ id: string; brackets: { id: string; size: number }[] }>(
+    `/api/phases/${phaseId}`,
+    () => api.get(`/api/phases/${phaseId}`)
+  );
+
+  const createBracket = async () => {
+    setCreating(true);
+    try {
+      await api.post(`/api/phases/${phaseId}/brackets`, { size });
+      await mutate();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div className="border-t border-gray-100 px-5 py-4 bg-gray-50/50">
+      {!phase ? (
+        <div className="text-xs text-gray-400 py-2">Loading bracket…</div>
+      ) : phase.brackets?.length === 0 ? (
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-500">No bracket yet.</span>
+          <select value={size} onChange={(e) => setSize(Number(e.target.value))}
+            className="text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none">
+            {[2, 4, 8, 16, 32].map((n) => <option key={n} value={n}>{n} teams</option>)}
+          </select>
+          <button onClick={createBracket} disabled={creating}
+            className="text-xs bg-brand-600 text-white px-3 py-1.5 rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 transition">
+            {creating ? "Creating…" : "Create bracket"}
+          </button>
+        </div>
+      ) : (
+        phase.brackets.map((bracket) => (
+          <BracketView key={bracket.id} bracketId={bracket.id} tournamentId={tournamentId} />
+        ))
       )}
     </div>
   );
