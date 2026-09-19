@@ -55,7 +55,7 @@ export async function standingRoutes(app: FastifyInstance) {
       orderBy: { _sum: { value: "desc" } },
     });
 
-    const playerIds = [...new Set(stats.map((s) => s.playerId))];
+    const playerIds = [...new Set(stats.map((s) => s.playerId).filter(Boolean))];
     const statDefIds = [...new Set(stats.map((s) => s.statDefId))];
 
     const [players, statDefs] = await Promise.all([

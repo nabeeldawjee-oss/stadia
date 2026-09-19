@@ -52,9 +52,9 @@ export async function presentationRoutes(app: FastifyInstance) {
     // Treat empty string as null for URL fields
     const cleaned = {
       ...body,
-      logoUrl: body.logoUrl || null,
-      bannerUrl: body.bannerUrl || null,
-      backgroundUrl: body.backgroundUrl || null,
+      logoUrl: body.logoUrl !== undefined ? (body.logoUrl || null) : undefined,
+      bannerUrl: body.bannerUrl !== undefined ? (body.bannerUrl || null) : undefined,
+      backgroundUrl: body.backgroundUrl !== undefined ? (body.backgroundUrl || null) : undefined,
     };
     const branding = await prisma.tournamentBranding.upsert({
       where: { tournamentId },

@@ -270,6 +270,8 @@ export default function TournamentOverviewPage() {
       {scoringMatch && (
         <ScoreEntryModal
           match={scoringMatch}
+          tournamentId={id}
+          isOverride={scoringMatch.status === "COMPLETED"}
           onClose={() => setScoringMatch(null)}
           onSaved={() => {
             setScoringMatch(null);

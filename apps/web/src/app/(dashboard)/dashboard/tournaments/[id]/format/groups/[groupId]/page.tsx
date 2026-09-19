@@ -18,7 +18,7 @@ interface Match {
   status: string;
   scheduledMatch?: { startTime: string; field: { name: string } } | null;
 }
-interface GroupDetail { id: string; name: string; teams: GroupTeam[]; standings: Standing[]; matches: Match[]; phase: { division: { tournamentId: string } }; }
+interface GroupDetail { id: string; name: string; teams: GroupTeam[]; standings: Standing[]; matches: Match[]; }
 
 export default function GroupDetailPage() {
   const { id: tournamentId, groupId } = useParams<{ id: string; groupId: string }>();
@@ -209,9 +209,10 @@ export default function GroupDetailPage() {
       {scoring && (
         <ScoreEntryModal
           match={scoring}
+          tournamentId={tournamentId}
+          isOverride={scoring.status === "COMPLETED"}
           onClose={() => setScoring(null)}
           onSaved={() => { setScoring(null); mutate(); }}
-          isOverride={scoring.status === "COMPLETED"}
         />
       )}
     </div>
