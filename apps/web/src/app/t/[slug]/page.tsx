@@ -183,7 +183,31 @@ export default function PublicTournamentPage() {
   const today = new Date().toISOString().split("T")[0];
 
   const fixtures = schedule.filter((sm) => sm.match.status !== "COMPLETED" && new Date(sm.startTime).getTime() >= Date.now() - 7200_000);
-  const results = schedule.filter((sm) => sm.match.homeScore != null).sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+  const scheduledResults = schedule.filter((sm) => sm.match.homeScore != null);
+  const scheduledResultIds = new Set(scheduledResults.map((sm) => sm.matchId));
+
+  // Collect all scored matches from tournament data (group + bracket matches)
+  interface ResultMatch { id: string; homeTeam: { name: string } | null; awayTeam: { name: string } | null; homeScore: number; awayScore: number; phaseName: string; groupName?: string; }
+  const allScoredMatches: ResultMatch[] = [];
+  for (const div of tournament.divisions) {
+    for (const phase of div.phases) {
+      for (const group of phase.groups ?? []) {
+        for (const m of group.matches ?? []) {
+          if (m.homeScore !== null && m.awayScore !== null && !scheduledResultIds.has(m.id)) {
+            allScoredMatches.push({ id: m.id, homeTeam: m.homeTeam, awayTeam: m.awayTeam, homeScore: m.homeScore as number, awayScore: m.awayScore as number, phaseName: phase.name, groupName: group.name });
+          }
+        }
+      }
+      for (const bracket of phase.brackets ?? []) {
+        for (const m of bracket.matches ?? []) {
+          if (m.homeScore !== null && m.awayScore !== null && !scheduledResultIds.has(m.id)) {
+            allScoredMatches.push({ id: m.id, homeTeam: m.homeTeam, awayTeam: m.awayTeam, homeScore: m.homeScore as number, awayScore: m.awayScore as number, phaseName: phase.name });
+          }
+        }
+      }
+    }
+  }
+  const results = scheduledResults.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -335,40 +359,70 @@ export default function PublicTournamentPage() {
         {/* RESULTS TAB */}
         {tab === "results" && (
           <div className="space-y-6">
-            {results.length === 0 ? (
+            {results.length === 0 && allScoredMatches.length === 0 ? (
               <div className="text-center py-12 text-gray-400 text-sm">No results yet</div>
             ) : (
-              Object.entries(
-                results.reduce<Record<string, ScheduledMatch[]>>((acc, sm) => {
-                  const d = new Date(sm.startTime).toISOString().split("T")[0];
-                  if (!acc[d]) acc[d] = [];
-                  acc[d].push(sm);
-                  return acc;
-                }, {})
-              ).sort(([a], [b]) => b.localeCompare(a)).map(([date, dayMatches]) => (
-                <div key={date}>
-                  <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{fmtDate(date)}</div>
-                  <div className="space-y-2">
-                    {dayMatches.map((sm) => (
-                      <div key={sm.matchId} className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-3">
-                        <div className="text-xs font-mono text-gray-400 w-10 shrink-0">{fmtTime(sm.startTime)}</div>
-                        <div className="text-xs text-gray-300 shrink-0">{sm.field?.name}</div>
-                        <div className="flex-1 flex items-center justify-center gap-3">
-                          <span className={`text-sm font-medium ${(sm.match.homeScore ?? 0) > (sm.match.awayScore ?? 0) ? "text-gray-900 font-bold" : "text-gray-500"}`}>
-                            {sm.match.homeTeam?.name ?? "TBD"}
+              <>
+                {results.length > 0 && Object.entries(
+                  results.reduce<Record<string, ScheduledMatch[]>>((acc, sm) => {
+                    const d = new Date(sm.startTime).toISOString().split("T")[0];
+                    if (!acc[d]) acc[d] = [];
+                    acc[d].push(sm);
+                    return acc;
+                  }, {})
+                ).sort(([a], [b]) => b.localeCompare(a)).map(([date, dayMatches]) => (
+                  <div key={date}>
+                    <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{fmtDate(date)}</div>
+                    <div className="space-y-2">
+                      {dayMatches.map((sm) => (
+                        <div key={sm.matchId} className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-3">
+                          <div className="text-xs font-mono text-gray-400 w-10 shrink-0">{fmtTime(sm.startTime)}</div>
+                          <div className="text-xs text-gray-300 shrink-0">{sm.field?.name}</div>
+                          <div className="flex-1 flex items-center justify-center gap-3">
+                            <span className={`text-sm font-medium ${(sm.match.homeScore ?? 0) > (sm.match.awayScore ?? 0) ? "text-gray-900 font-bold" : "text-gray-500"}`}>
+                              {sm.match.homeTeam?.name ?? "TBD"}
+                            </span>
+                            <span className="font-mono font-bold text-gray-900 text-base px-2">
+                              {sm.match.homeScore} – {sm.match.awayScore}
+                            </span>
+                            <span className={`text-sm font-medium ${(sm.match.awayScore ?? 0) > (sm.match.homeScore ?? 0) ? "text-gray-900 font-bold" : "text-gray-500"}`}>
+                              {sm.match.awayTeam?.name ?? "TBD"}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                {allScoredMatches.length > 0 && Object.entries(
+                  allScoredMatches.reduce<Record<string, ResultMatch[]>>((acc, m) => {
+                    const key = m.groupName ? `${m.phaseName} · ${m.groupName}` : m.phaseName;
+                    if (!acc[key]) acc[key] = [];
+                    acc[key].push(m);
+                    return acc;
+                  }, {})
+                ).map(([label, matches]) => (
+                  <div key={label}>
+                    <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{label}</div>
+                    <div className="space-y-2">
+                      {matches.map((m) => (
+                        <div key={m.id} className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex items-center justify-center gap-3">
+                          <span className={`text-sm font-medium ${m.homeScore > m.awayScore ? "text-gray-900 font-bold" : "text-gray-500"}`}>
+                            {m.homeTeam?.name ?? "TBD"}
                           </span>
                           <span className="font-mono font-bold text-gray-900 text-base px-2">
-                            {sm.match.homeScore} – {sm.match.awayScore}
+                            {m.homeScore} – {m.awayScore}
                           </span>
-                          <span className={`text-sm font-medium ${(sm.match.awayScore ?? 0) > (sm.match.homeScore ?? 0) ? "text-gray-900 font-bold" : "text-gray-500"}`}>
-                            {sm.match.awayTeam?.name ?? "TBD"}
+                          <span className={`text-sm font-medium ${m.awayScore > m.homeScore ? "text-gray-900 font-bold" : "text-gray-500"}`}>
+                            {m.awayTeam?.name ?? "TBD"}
                           </span>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))
+                ))}
+              </>
             )}
           </div>
         )}
