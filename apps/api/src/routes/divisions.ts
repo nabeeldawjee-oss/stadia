@@ -305,7 +305,7 @@ export async function divisionRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: phases });
   });
 
-  // Repair: generate matches for an existing bracket that has slots but no matches
+  // Repair: generate Match records for a bracket that has slots but no matches
   app.post("/api/brackets/:bracketId/generate-matches", { preHandler: authenticate }, async (req, reply) => {
     const { bracketId } = req.params as { bracketId: string };
     const bracket = await prisma.bracket.findUnique({
