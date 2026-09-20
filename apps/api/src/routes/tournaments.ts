@@ -306,4 +306,45 @@ export async function tournamentRoutes(app: FastifyInstance) {
       });
     }
   );
+
+  // All matches across the tournament, grouped by division → phase → group/bracket
+  app.get(
+    "/api/tournaments/:id/matches",
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      await assertTournamentAccess(request.userId!, id, "view_only");
+
+      const divisions = await prisma.division.findMany({
+        where: { tournamentId: id },
+        include: {
+          phases: {
+            include: {
+              groups: {
+                include: {
+                  matches: {
+                    include: { homeTeam: true, awayTeam: true },
+                    orderBy: [{ roundNumber: "asc" }, { createdAt: "asc" }],
+                  },
+                },
+                orderBy: { name: "asc" },
+              },
+              brackets: {
+                include: {
+                  matches: {
+                    include: { homeTeam: true, awayTeam: true },
+                    orderBy: [{ roundNumber: "asc" }, { createdAt: "asc" }],
+                  },
+                },
+              },
+            },
+            orderBy: { orderIndex: "asc" },
+          },
+        },
+        orderBy: { orderIndex: "asc" },
+      });
+
+      return reply.send({ success: true, data: divisions });
+    }
+  );
 }
