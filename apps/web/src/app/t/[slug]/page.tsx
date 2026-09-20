@@ -1,6 +1,7 @@
 "use client";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -293,7 +294,9 @@ export default function PublicTournamentPage() {
                             {group.standings.map((row) => (
                               <tr key={row.position} className="hover:bg-gray-50">
                                 <td className="px-4 py-2.5 text-gray-400 text-xs w-8">{row.position}</td>
-                                <td className="px-4 py-2.5 font-medium text-gray-900">{row.team.name}</td>
+                                <td className="px-4 py-2.5 font-medium text-gray-900">
+                                  <Link href={`/t/${slug}/teams/${row.team.id}`} className="hover:underline" style={{ color: primary }}>{row.team.name}</Link>
+                                </td>
                                 <td className="px-2 py-2.5 text-center text-gray-500">{row.played}</td>
                                 <td className="px-2 py-2.5 text-center text-gray-500">{row.wins}</td>
                                 <td className="px-2 py-2.5 text-center text-gray-500">{row.draws}</td>
