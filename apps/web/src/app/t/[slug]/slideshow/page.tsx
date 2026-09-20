@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
-interface Standing { position: number; team: { name: string }; played: number; won: number; drawn: number; lost: number; goalDifference: number; points: number; }
+interface Standing { position: number; team: { name: string }; played: number; wins: number; draws: number; losses: number; goalDifference: number; points: number; }
 interface Post { id: string; title: string; body: string; }
 interface SlideshowData { name: string; sport: string; branding?: { primaryColor?: string; logoUrl?: string }; slideshow?: { autoPlaySeconds?: number; theme?: string; showStandings?: boolean; showPosts?: boolean }; posts: Post[]; divisions: any[]; }
 
@@ -103,9 +103,9 @@ export default function SlideshowPage() {
                     <td style={{ padding: "10px 12px", color: muted, textAlign: "center" }}>{row.position}</td>
                     <td style={{ padding: "10px 12px", fontWeight: 600, fontSize: 16 }}>{row.team.name}</td>
                     <td style={{ padding: "10px 12px", textAlign: "center" }}>{row.played}</td>
-                    <td style={{ padding: "10px 12px", textAlign: "center" }}>{row.won}</td>
-                    <td style={{ padding: "10px 12px", textAlign: "center" }}>{row.drawn}</td>
-                    <td style={{ padding: "10px 12px", textAlign: "center" }}>{row.lost}</td>
+                    <td style={{ padding: "10px 12px", textAlign: "center" }}>{row.wins}</td>
+                    <td style={{ padding: "10px 12px", textAlign: "center" }}>{row.draws}</td>
+                    <td style={{ padding: "10px 12px", textAlign: "center" }}>{row.losses}</td>
                     <td style={{ padding: "10px 12px", textAlign: "center" }}>{row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}</td>
                     <td style={{ padding: "10px 12px", textAlign: "center", fontWeight: 800, fontSize: 18, color: primary }}>{row.points}</td>
                   </tr>
