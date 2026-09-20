@@ -364,6 +364,32 @@ export async function divisionRoutes(app: FastifyInstance) {
     return reply.send({ success: true });
   });
 
+  // Configure advancement rule for a single bracket slot
+  app.put("/api/bracket-slots/:slotId/advancement", { preHandler: authenticate }, async (req, reply) => {
+    const { slotId } = req.params as { slotId: string };
+    const { fromGroupId, position, fromPhaseId } = z.object({
+      fromGroupId: z.string().nullable(),
+      position: z.number().int().min(1).nullable(),
+      fromPhaseId: z.string(),
+    }).parse(req.body);
+    const slot = await prisma.bracketSlot.findUnique({
+      where: { id: slotId },
+      include: { bracket: { include: { phase: { include: { division: true } } } } },
+    });
+    if (!slot) return reply.code(404).send({ success: false, error: "Slot not found" });
+    await assertTournamentAccess(req.userId!, slot.bracket.phase.division.tournamentId, "manage_general");
+    // Remove any existing rule pointing to this slot
+    await prisma.advancementRule.deleteMany({ where: { toBracketSlotId: slotId } });
+    // Remove any existing rule for this group+position combo (avoid duplicates)
+    if (fromGroupId && position) {
+      await prisma.advancementRule.deleteMany({ where: { fromPhaseId, fromGroupId, finishingPosition: position } });
+      await prisma.advancementRule.create({
+        data: { fromPhaseId, fromGroupId, finishingPosition: position, toPhaseId: slot.bracket.phase.id, toBracketSlotId: slotId },
+      });
+    }
+    return reply.send({ success: true, data: null });
+  });
+
   // Get bracket tree
   // Get group-stage qualifiers available to seed into this bracket
   app.get("/api/brackets/:bracketId/qualifiers", { preHandler: authenticate }, async (req, reply) => {

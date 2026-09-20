@@ -36,8 +36,9 @@ export async function advancementRoutes(app: FastifyInstance) {
     const phase = await prisma.phase.findUnique({ where: { id: phaseId }, include: { division: true } });
     if (!phase) return reply.code(404).send({ success: false, error: "Not found" });
     await assertTournamentAccess(req.userId!, phase.division.tournamentId, "manage_general");
-    const rules = ruleSchema.parse(req.body);
-    await saveAdvancementRules(rules);
+    type RuleItem = { fromGroupId: string; position: number; toPhaseId: string; toBracketSlotId?: string };
+    const rules = ruleSchema.parse(req.body) as RuleItem[];
+    await saveAdvancementRules(phaseId, rules);
     return reply.send({ success: true, data: null });
   });
 

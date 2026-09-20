@@ -47,10 +47,20 @@ export async function startNextPhase(
       },
     });
     if (!standing || !rule.toBracketSlotId) continue;
-    await prisma.bracketSlot.update({
+    const slot = await prisma.bracketSlot.update({
       where: { id: rule.toBracketSlotId },
       data: { teamId: standing.teamId },
     });
+    // Propagate into the match record so homeTeam/awayTeam is populated immediately
+    const match = await prisma.match.findFirst({
+      where: slot.side === "HOME" ? { homeSlotId: slot.id } : { awaySlotId: slot.id },
+    });
+    if (match) {
+      await prisma.match.update({
+        where: { id: match.id },
+        data: slot.side === "HOME" ? { homeTeamId: standing.teamId } : { awayTeamId: standing.teamId },
+      });
+    }
   }
 
   await prisma.phase.update({

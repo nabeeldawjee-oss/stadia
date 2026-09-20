@@ -9,6 +9,7 @@ import BracketView from "@/components/BracketView";
 interface Group { id: string; name: string; }
 interface Bracket { id: string; size: number; }
 interface Phase { id: string; name: string; type: string; status: string; groups: Group[]; brackets: Bracket[]; }
+interface GroupPhase { id: string; name: string; groups: Group[]; }
 interface Division { id: string; name: string; matchDurationMinutes: number; halfDurationMinutes: number; phases: Phase[]; }
 
 interface StandingRow { position: number; team: { id: string; name: string }; points: number; played: number; wins: number; draws: number; losses: number; goalDifference: number; }
@@ -364,7 +365,11 @@ export default function DivisionPage() {
               </div>
               {/* Inline bracket panel */}
               {phase.type === "KNOCKOUT" && expandedBracketPhaseId === phase.id && (
-                <InlineBracket phaseId={phase.id} tournamentId={tournamentId} />
+                <InlineBracket
+                  phaseId={phase.id}
+                  tournamentId={tournamentId}
+                  groupPhases={division.phases.filter((p) => p.type === "GROUP_STAGE")}
+                />
               )}
             </div>
           ))}
@@ -383,7 +388,7 @@ export default function DivisionPage() {
   );
 }
 
-function InlineBracket({ phaseId, tournamentId }: { phaseId: string; tournamentId: string }) {
+function InlineBracket({ phaseId, tournamentId, groupPhases }: { phaseId: string; tournamentId: string; groupPhases: GroupPhase[] }) {
   const [creating, setCreating] = useState(false);
   const [size, setSize] = useState(8);
   const { data: phase, mutate } = useSWR<{ id: string; brackets: { id: string; size: number }[] }>(
@@ -421,9 +426,108 @@ function InlineBracket({ phaseId, tournamentId }: { phaseId: string; tournamentI
         </div>
       ) : (
         phase.brackets.map((bracket) => (
-          <BracketView key={bracket.id} bracketId={bracket.id} tournamentId={tournamentId} />
+          <div key={bracket.id}>
+            <BracketView bracketId={bracket.id} tournamentId={tournamentId} />
+            {groupPhases.length > 0 && (
+              <SeedingConfig
+                bracketId={bracket.id}
+                knockoutPhaseId={phaseId}
+                groupPhases={groupPhases}
+              />
+            )}
+          </div>
         ))
       )}
+    </div>
+  );
+}
+
+interface BracketSlotDetail { id: string; roundNumber: number; position: number; side: "HOME" | "AWAY"; }
+interface AdvancementRuleRaw { id: string; fromGroupId: string | null; finishingPosition: number; toBracketSlotId: string | null; }
+
+function SeedingConfig({ bracketId, knockoutPhaseId, groupPhases }: { bracketId: string; knockoutPhaseId: string; groupPhases: GroupPhase[] }) {
+  const [saving, setSaving] = useState<string | null>(null);
+
+  const { data: bracket } = useSWR<{ slots: BracketSlotDetail[] }>(
+    `/api/brackets/${bracketId}`,
+    () => api.get(`/api/brackets/${bracketId}`)
+  );
+
+  const fromPhaseId = groupPhases[0]?.id ?? "";
+  const { data: rules, mutate: mutateRules } = useSWR<AdvancementRuleRaw[]>(
+    fromPhaseId ? `/api/phases/${fromPhaseId}/advancement` : null,
+    () => api.get(`/api/phases/${fromPhaseId}/advancement`)
+  );
+
+  const slotRuleMap: Record<string, string> = {};
+  for (const rule of rules ?? []) {
+    if (rule.toBracketSlotId && rule.fromGroupId) {
+      slotRuleMap[rule.toBracketSlotId] = `${rule.fromGroupId}:${rule.finishingPosition}`;
+    }
+  }
+
+  const r1Slots = (bracket?.slots ?? [])
+    .filter((s) => s.roundNumber === 1)
+    .sort((a, b) => a.position !== b.position ? a.position - b.position : a.side === "HOME" ? -1 : 1);
+
+  const ordinal = (n: number) => ["", "1st", "2nd", "3rd", "4th", "5th", "6th"][n] ?? `${n}th`;
+  const options: { value: string; label: string; groupPhaseId: string }[] = [];
+  for (const gp of groupPhases) {
+    for (const g of gp.groups) {
+      const maxPos = Math.max(4, gp.groups.length * 2);
+      for (let pos = 1; pos <= maxPos; pos++) {
+        options.push({ value: `${g.id}:${pos}`, label: `${ordinal(pos)} ${g.name}`, groupPhaseId: gp.id });
+      }
+    }
+  }
+
+  if (r1Slots.length === 0) return null;
+
+  const handleChange = async (slotId: string, value: string) => {
+    const opt = options.find((o) => o.value === value);
+    if (!opt && value !== "") return;
+    setSaving(slotId);
+    try {
+      if (value === "") {
+        await api.put(`/api/bracket-slots/${slotId}/advancement`, { fromGroupId: null, position: null, fromPhaseId });
+      } else {
+        const [groupId, posStr] = value.split(":");
+        await api.put(`/api/bracket-slots/${slotId}/advancement`, { fromGroupId: groupId, position: parseInt(posStr), fromPhaseId: opt!.groupPhaseId });
+      }
+      await mutateRules();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  return (
+    <div className="mt-5 pt-4 border-t border-gray-200">
+      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Configure seedings (Round 1)</h4>
+      <div className="grid grid-cols-2 gap-2">
+        {r1Slots.map((slot) => {
+          const current = slotRuleMap[slot.id] ?? "";
+          return (
+            <div key={slot.id} className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2">
+              <span className="text-xs text-gray-400 w-24 shrink-0 font-mono">Slot {slot.position} {slot.side}</span>
+              <select
+                value={current}
+                onChange={(e) => handleChange(slot.id, e.target.value)}
+                disabled={saving === slot.id}
+                className="flex-1 text-xs border border-gray-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400 disabled:opacity-50"
+              >
+                <option value="">Pick group position…</option>
+                {options.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              {saving === slot.id && <span className="text-xs text-gray-400">Saving…</span>}
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-xs text-gray-400 mt-2">These assignments determine which teams enter each bracket slot when the group stage is advanced.</p>
     </div>
   );
 }
