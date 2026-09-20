@@ -1,11 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { signUp } from "../engines/auth/sign-up";
 import { signIn } from "../engines/auth/sign-in";
 import { authenticate } from "../middleware/authenticate";
 import { prisma } from "@stadia/db";
 import type { SignUpBody, SignInBody } from "@stadia/types";
+import { sendEmail, passwordResetHtml } from "../lib/email";
 
 const signUpSchema = z.object({
   email: z.string().email(),
@@ -91,4 +93,40 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.send({ success: true, data: updated });
     }
   );
+
+  // ── Forgot password ────────────────────────────────────────────────────────
+  app.post("/api/auth/forgot-password", async (request, reply) => {
+    const { email } = z.object({ email: z.string().email() }).parse(request.body);
+    // Always respond OK so we don't reveal whether an email exists
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (user) {
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+      await prisma.passwordResetToken.create({ data: { token, userId: user.id, expiresAt } });
+      const webBase = (process.env.WEB_BASE_URL || "http://localhost:3001").split(",")[0].trim();
+      const resetUrl = `${webBase}/reset-password?token=${token}`;
+      await sendEmail({ to: user.email, subject: "Reset your Stadia password", html: passwordResetHtml(resetUrl, user.name) });
+    }
+    return reply.send({ success: true });
+  });
+
+  // ── Reset password ─────────────────────────────────────────────────────────
+  app.post("/api/auth/reset-password", async (request, reply) => {
+    const { token, password } = z.object({
+      token: z.string().min(1),
+      password: z.string().min(8),
+    }).parse(request.body);
+
+    const record = await prisma.passwordResetToken.findUnique({ where: { token }, include: { user: true } });
+    if (!record || record.usedAt || record.expiresAt < new Date()) {
+      return reply.code(400).send({ success: false, error: "This link is invalid or has expired." });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),
+      prisma.passwordResetToken.update({ where: { token }, data: { usedAt: new Date() } }),
+    ]);
+    return reply.send({ success: true });
+  });
 }
