@@ -2,7 +2,7 @@
 import { useParams } from "next/navigation";
 import useSWR, { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
-import { Users, GitBranch, Calendar, Trophy, Clock, MapPin, Pencil, CheckCircle, PlayCircle, BarChart2, ChevronRight, Globe, X, Undo2 } from "lucide-react";
+import { Users, GitBranch, Calendar, Trophy, Clock, MapPin, Pencil, CheckCircle, PlayCircle, BarChart2, ChevronRight, Globe, X, Undo2, ExternalLink, Copy, Check } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import ScoreEntryModal from "@/components/ScoreEntryModal";
 import PhaseTransitionModal from "@/components/PhaseTransitionModal";
@@ -164,6 +164,7 @@ export default function TournamentOverviewPage() {
   };
 
   const [undoing, setUndoing] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
   const handleUndo = async (phaseId: string) => {
     if (!confirm("Undo this phase transition? The next phase will be reset to Pending and bracket seeds cleared.")) return;
     setUndoing(phaseId);
@@ -455,20 +456,56 @@ export default function TournamentOverviewPage() {
       </div>
 
       {/* Quick links */}
-      <div className="bg-white border border-gray-200 rounded-2xl p-5">
-        <h3 className="font-medium text-gray-700 text-sm mb-3">Quick links</h3>
-        <a
-          href={`/t/${t.status !== "DRAFT" ? (t as any).slug : "#"}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`inline-flex items-center gap-1.5 text-sm text-brand-600 hover:underline ${t.status === "DRAFT" ? "opacity-40 pointer-events-none" : ""}`}
-        >
-          Public tournament page <ChevronRight className="w-3.5 h-3.5" />
-        </a>
-        {t.status === "DRAFT" && (
-          <p className="text-xs text-gray-400 mt-1">Publish the tournament to share the public link.</p>
-        )}
-      </div>
+      {(() => {
+        const slug = (t as any).slug as string | undefined;
+        const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+        const publicUrl = slug ? `${baseUrl}/t/${slug}` : null;
+        const regUrl = slug ? `${baseUrl}/t/${slug}/register` : null;
+        const isDraft = t.status === "DRAFT";
+
+        const copyLink = async (url: string, key: string) => {
+          await navigator.clipboard.writeText(url);
+          setCopied(key);
+          setTimeout(() => setCopied(null as any), 2000);
+        };
+
+        const rows = [
+          { label: "Public page", url: publicUrl },
+          { label: "Registration form", url: regUrl },
+        ];
+
+        return (
+          <div className="bg-white border border-gray-200 rounded-2xl p-5">
+            <h3 className="font-medium text-gray-700 text-sm mb-3">Quick links</h3>
+            {isDraft ? (
+              <p className="text-xs text-gray-400">Publish the tournament to share these links.</p>
+            ) : (
+              <div className="space-y-2">
+                {rows.map(({ label, url }) => url && (
+                  <div key={label} className="flex items-center gap-2">
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 min-w-0 text-sm text-brand-600 hover:underline truncate flex items-center gap-1"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                      {label}
+                    </a>
+                    <button
+                      onClick={() => copyLink(url, label)}
+                      className="shrink-0 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                      title="Copy link"
+                    >
+                      {(copied as any) === label ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Score entry modal */}
       {scoringMatch && (
