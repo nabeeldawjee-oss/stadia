@@ -5,6 +5,7 @@ import { authenticate } from "../middleware/authenticate";
 import { assertTournamentAccess } from "../engines/auth/permissions";
 import { autoSchedule } from "../engines/scheduling/auto-schedule";
 import { moveMatch } from "../engines/scheduling/move-match";
+import type { AutoScheduleBody } from "@stadia/types";
 
 const autoScheduleSchema = z.object({
   groupIds: z.array(z.string()).optional(),
@@ -48,7 +49,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
     const { tournamentId } = req.params as { tournamentId: string };
     await assertTournamentAccess(req.userId!, tournamentId, "manage_schedule");
     try {
-      const body = autoScheduleSchema.parse(req.body);
+      const body = autoScheduleSchema.parse(req.body) as AutoScheduleBody;
       const result = await autoSchedule(tournamentId, body);
       return reply.send({ success: true, data: result });
     } catch (err: any) {

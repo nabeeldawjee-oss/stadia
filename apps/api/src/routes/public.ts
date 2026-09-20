@@ -221,6 +221,26 @@ export async function publicRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: rankings.sort((a, b) => a.rank - b.rank) });
   });
 
+  // Public teams list
+  app.get("/api/public/t/:slug/teams", async (req, reply) => {
+    const { slug } = req.params as { slug: string };
+    const tournament = await prisma.tournament.findUnique({ where: { slug }, select: { id: true, status: true } });
+    if (!tournament || tournament.status === "DRAFT") {
+      return reply.code(404).send({ success: false, error: "Not found" });
+    }
+    const teams = await prisma.team.findMany({
+      where: { tournamentId: tournament.id },
+      select: {
+        id: true,
+        name: true,
+        logoUrl: true,
+        _count: { select: { players: true } },
+      },
+      orderBy: { name: "asc" },
+    });
+    return reply.send({ success: true, data: teams });
+  });
+
   // Public team page
   app.get("/api/public/t/:slug/teams/:teamId", async (req, reply) => {
     const { slug, teamId } = req.params as { slug: string; teamId: string };

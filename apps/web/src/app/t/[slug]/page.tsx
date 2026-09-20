@@ -55,10 +55,11 @@ interface ScheduledMatch {
   match: { homeTeam: { name: string } | null; awayTeam: { name: string } | null; homeScore: number | null; awayScore: number | null; status: string };
 }
 
-type Tab = "standings" | "fixtures" | "results" | "bracket" | "stats" | "news";
+type Tab = "standings" | "fixtures" | "results" | "bracket" | "stats" | "news" | "teams";
 
 interface StatEntry { player: { id: string; name: string; team: { name: string } } | null; total: number; }
 interface StatBoard { statDef: { id: string; name: string; key: string }; entries: StatEntry[]; }
+interface PublicTeam { id: string; name: string; logoUrl: string | null; _count: { players: number }; }
 
 function PublicBracket({ bracket, primary }: { bracket: Bracket; primary: string }) {
   const totalRounds = Math.log2(bracket.size);
@@ -155,14 +156,16 @@ export default function PublicTournamentPage() {
   const [activeDivision, setActiveDivision] = useState<string | null>(null);
   const [statBoards, setStatBoards] = useState<StatBoard[]>([]);
   const [rankings, setRankings] = useState<{ rank: number; team: { id: string; name: string }; label: string }[]>([]);
+  const [teams, setTeams] = useState<PublicTeam[]>([]);
 
   const load = async () => {
     try {
-      const [tRes, sRes, stRes, rRes] = await Promise.all([
+      const [tRes, sRes, stRes, rRes, teamsRes] = await Promise.all([
         fetch(`${API_URL}/api/public/t/${slug}`),
         fetch(`${API_URL}/api/public/t/${slug}/schedule`),
         fetch(`${API_URL}/api/public/t/${slug}/stats`),
         fetch(`${API_URL}/api/public/t/${slug}/ranking`),
+        fetch(`${API_URL}/api/public/t/${slug}/teams`),
       ]);
       if (!tRes.ok) { setNotFound(true); setLoading(false); return; }
       const t = await tRes.json();
@@ -171,6 +174,7 @@ export default function PublicTournamentPage() {
       if (sRes.ok) { const s = await sRes.json(); setSchedule(s.data ?? []); }
       if (stRes.ok) { const st = await stRes.json(); setStatBoards(st.data ?? []); }
       if (rRes.ok) { const r = await rRes.json(); setRankings(r.data ?? []); }
+      if (teamsRes.ok) { const tm = await teamsRes.json(); setTeams(tm.data ?? []); }
     } catch { setNotFound(true); }
     setLoading(false);
   };
@@ -187,6 +191,7 @@ export default function PublicTournamentPage() {
   const hasStats = statBoards.length > 0;
   const publishedPosts = (tournament.posts ?? []).filter((p) => p.published !== false);
   const hasPosts = publishedPosts.length > 0;
+  const hasTeams = teams.length > 0;
 
   // Group schedule by date
   const byDate: Record<string, ScheduledMatch[]> = {};
@@ -290,7 +295,7 @@ export default function PublicTournamentPage() {
       {/* Tabs */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 flex gap-0">
-          {(["standings", "fixtures", "results", ...(hasKnockout ? ["bracket" as Tab] : []), ...(hasStats ? ["stats" as Tab] : []), ...(hasPosts ? ["news" as Tab] : [])] as Tab[]).map((t) => (
+          {(["standings", "fixtures", "results", ...(hasKnockout ? ["bracket" as Tab] : []), ...(hasStats ? ["stats" as Tab] : []), ...(hasPosts ? ["news" as Tab] : []), ...(hasTeams ? ["teams" as Tab] : [])] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -580,6 +585,33 @@ export default function PublicTournamentPage() {
                 </div>
                 <p className="text-sm text-gray-600 whitespace-pre-wrap leading-relaxed">{post.body}</p>
               </div>
+            ))}
+          </div>
+        )}
+
+        {/* TEAMS TAB */}
+        {tab === "teams" && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {teams.map((team) => (
+              <Link
+                key={team.id}
+                href={`/t/${slug}/teams/${team.id}`}
+                className="bg-white border border-gray-200 rounded-2xl p-4 flex items-center gap-3 hover:border-gray-300 hover:shadow-sm transition"
+              >
+                {team.logoUrl ? (
+                  <img src={team.logoUrl} alt="" className="w-10 h-10 object-contain rounded-lg shrink-0" />
+                ) : (
+                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                    <span className="text-xs font-bold text-gray-400">{team.name.slice(0, 2).toUpperCase()}</span>
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">{team.name}</p>
+                  {team._count.players > 0 && (
+                    <p className="text-xs text-gray-400">{team._count.players} player{team._count.players !== 1 ? "s" : ""}</p>
+                  )}
+                </div>
+              </Link>
             ))}
           </div>
         )}

@@ -6,6 +6,7 @@ import { assertTournamentAccess } from "../engines/auth/permissions";
 import { submitScore } from "../engines/scoring/submit-score";
 import { overrideScore } from "../engines/scoring/override-score";
 import { resolveToken } from "../engines/scoring/token-resolver";
+import type { SubmitScoreBody, OverrideScoreBody } from "@stadia/types";
 
 const scoreSchema = z.object({
   homeScore: z.number().int().min(0),
@@ -35,7 +36,7 @@ export async function scoreRoutes(app: FastifyInstance) {
     if (!match) return reply.code(404).send({ success: false, error: "Not found" });
     await assertTournamentAccess(req.userId!, match.tournamentId, "enter_results");
     try {
-      const body = scoreSchema.parse(req.body);
+      const body = scoreSchema.parse(req.body) as SubmitScoreBody;
       await submitScore(matchId, body, { type: "organizer", userId: req.userId! });
       return reply.send({ success: true, data: null });
     } catch (err: any) {
@@ -52,7 +53,7 @@ export async function scoreRoutes(app: FastifyInstance) {
     try {
       const { matchId } = z.object({ matchId: z.string() }).parse(req.body);
       const ctx = await resolveToken(token);
-      const body = scoreSchema.parse(req.body);
+      const body = scoreSchema.parse(req.body) as SubmitScoreBody;
 
       if (ctx.type === "REFEREE") {
         await submitScore(matchId, body, { type: "referee", refereeId: ctx.entityId });
@@ -73,7 +74,7 @@ export async function scoreRoutes(app: FastifyInstance) {
     if (!match) return reply.code(404).send({ success: false, error: "Not found" });
     await assertTournamentAccess(req.userId!, match.tournamentId, "enter_results");
     try {
-      const body = overrideSchema.parse(req.body);
+      const body = overrideSchema.parse(req.body) as OverrideScoreBody;
       await overrideScore(matchId, body, req.userId!);
       return reply.send({ success: true, data: null });
     } catch (err: any) {

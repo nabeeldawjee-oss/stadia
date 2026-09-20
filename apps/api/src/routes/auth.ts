@@ -4,6 +4,7 @@ import { signUp } from "../engines/auth/sign-up";
 import { signIn } from "../engines/auth/sign-in";
 import { authenticate } from "../middleware/authenticate";
 import { prisma } from "@stadia/db";
+import type { SignUpBody, SignInBody } from "@stadia/types";
 
 const signUpSchema = z.object({
   email: z.string().email(),
@@ -18,7 +19,7 @@ const signInSchema = z.object({
 
 export async function authRoutes(app: FastifyInstance) {
   app.post("/api/auth/signup", async (request, reply) => {
-    const body = signUpSchema.parse(request.body);
+    const body = signUpSchema.parse(request.body) as SignUpBody;
     try {
       const result = await signUp(body);
       return reply.code(201).send({ success: true, data: result });
@@ -28,7 +29,7 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/auth/signin", async (request, reply) => {
-    const body = signInSchema.parse(request.body);
+    const body = signInSchema.parse(request.body) as SignInBody;
     try {
       const result = await signIn(body);
       return reply.send({ success: true, data: result });
