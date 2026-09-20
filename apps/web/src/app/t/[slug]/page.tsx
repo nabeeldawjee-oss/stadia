@@ -314,6 +314,39 @@ export default function PublicTournamentPage() {
         </div>
       </div>
 
+      {/* Live Now strip */}
+      {(() => {
+        const liveMatches = schedule.filter((sm) => sm.match.status === "IN_PROGRESS");
+        if (!liveMatches.length) return null;
+        return (
+          <div className="border-b border-red-100 bg-red-50">
+            <div className="max-w-3xl mx-auto px-4 py-2 flex items-center gap-3 overflow-x-auto">
+              <span className="flex items-center gap-1.5 text-xs font-bold text-red-600 uppercase tracking-wide shrink-0">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                </span>
+                Live
+              </span>
+              <div className="flex items-center gap-2">
+                {liveMatches.map((sm) => (
+                  <div
+                    key={sm.matchId}
+                    className="flex items-center gap-2 bg-white border border-red-200 rounded-lg px-3 py-1.5 text-sm font-medium text-gray-900 shrink-0 shadow-sm"
+                  >
+                    <span className="truncate max-w-[90px]">{sm.match.homeTeam?.name ?? "TBD"}</span>
+                    <span className="font-black tabular-nums text-red-600 mx-1">
+                      {sm.match.homeScore ?? 0} – {sm.match.awayScore ?? 0}
+                    </span>
+                    <span className="truncate max-w-[90px]">{sm.match.awayTeam?.name ?? "TBD"}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Registration banner */}
       {tournament.registration?.isOpen && (
         <div className="border-b border-gray-100" style={{ backgroundColor: `${primary}10` }}>
