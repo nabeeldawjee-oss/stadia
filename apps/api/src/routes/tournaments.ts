@@ -78,8 +78,8 @@ export async function tournamentRoutes(app: FastifyInstance) {
           status: s.match.status,
           homeScore: s.match.homeScore,
           awayScore: s.match.awayScore,
-          homeTeam: s.match.homeTeam?.name ?? "TBD",
-          awayTeam: s.match.awayTeam?.name ?? "TBD",
+          homeTeam: s.match.homeTeam ?? null,
+          awayTeam: s.match.awayTeam ?? null,
           tournament: s.match.tournament,
         })),
       });
