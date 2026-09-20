@@ -1,7 +1,7 @@
 "use client";
 import useSWR from "swr";
 import { api } from "@/lib/api";
-import { X, Trophy, Medal, Award } from "lucide-react";
+import { X, Trophy, Medal, Award, Printer } from "lucide-react";
 
 interface RankEntry {
   rank: number;
@@ -37,9 +37,18 @@ export default function RankingModal({ tournamentId, onClose }: { tournamentId: 
             <Trophy className="w-5 h-5 text-yellow-400" />
             <h2 className="text-white font-bold text-lg">Final Rankings</h2>
           </div>
-          <button onClick={onClose} className="text-white/60 hover:text-white transition">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 text-white/70 hover:text-white text-xs font-medium px-3 py-1.5 rounded-lg border border-white/20 hover:border-white/40 transition"
+              title="Print / Save as PDF"
+            >
+              <Printer className="w-3.5 h-3.5" /> Export
+            </button>
+            <button onClick={onClose} className="text-white/60 hover:text-white transition">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="p-4 space-y-2 max-h-[70vh] overflow-y-auto">
