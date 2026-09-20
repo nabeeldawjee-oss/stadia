@@ -2,7 +2,7 @@
 import { useParams } from "next/navigation";
 import useSWR, { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
-import { Users, GitBranch, Calendar, Trophy, Clock, MapPin, Pencil, CheckCircle, PlayCircle, BarChart2, ChevronRight, Globe, X, Undo2, ExternalLink, Copy, Check } from "lucide-react";
+import { Users, GitBranch, Calendar, Trophy, Clock, MapPin, Pencil, CheckCircle, PlayCircle, BarChart2, ChevronRight, Globe, X, Undo2, ExternalLink, Copy, Check, Target, UserPlus } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import ScoreEntryModal from "@/components/ScoreEntryModal";
 import PhaseTransitionModal from "@/components/PhaseTransitionModal";
@@ -65,6 +65,13 @@ export default function TournamentOverviewPage() {
   const { data: progress, mutate: mutateProgress } = useSWR<PhaseProgress[]>(
     `/api/tournaments/${id}/progress`,
     () => api.get(`/api/tournaments/${id}/progress`)
+  );
+
+  interface ActivityEvent { type: string; at: string; label: string; detail?: string }
+  const { data: activity } = useSWR<ActivityEvent[]>(
+    `/api/tournaments/${id}/activity`,
+    () => api.get(`/api/tournaments/${id}/activity`),
+    { refreshInterval: 30000 }
   );
 
   const [scoringMatch, setScoringMatch] = useState<{ id: string; homeTeam: { id: string; name: string } | null; awayTeam: { id: string; name: string } | null; status: string } | null>(null);
@@ -454,6 +461,44 @@ export default function TournamentOverviewPage() {
           </div>
         )}
       </div>
+
+      {/* Recent activity */}
+      {activity && activity.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h3 className="font-semibold text-gray-900 text-sm">Recent activity</h3>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {activity.map((event, i) => {
+              const isMatch = event.type === "match_result";
+              const ago = (() => {
+                const diff = Date.now() - new Date(event.at).getTime();
+                const mins = Math.floor(diff / 60000);
+                const hrs = Math.floor(mins / 60);
+                const days = Math.floor(hrs / 24);
+                if (days > 0) return `${days}d ago`;
+                if (hrs > 0) return `${hrs}h ago`;
+                if (mins > 0) return `${mins}m ago`;
+                return "just now";
+              })();
+              return (
+                <div key={i} className="px-6 py-3 flex items-center gap-3">
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${isMatch ? "bg-brand-50" : "bg-green-50"}`}>
+                    {isMatch
+                      ? <Target className="w-3.5 h-3.5 text-brand-600" />
+                      : <UserPlus className="w-3.5 h-3.5 text-green-600" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{event.label}</p>
+                    {event.detail && <p className="text-xs text-gray-400 truncate">{event.detail}</p>}
+                  </div>
+                  <span className="text-xs text-gray-400 shrink-0">{ago}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Quick links */}
       {(() => {

@@ -441,6 +441,58 @@ export async function tournamentRoutes(app: FastifyInstance) {
     }
   );
 
+  // Recent activity feed
+  app.get(
+    "/api/tournaments/:id/activity",
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      await assertTournamentAccess(request.userId!, id, "view_only");
+
+      const [recentMatches, recentRegistrations] = await Promise.all([
+        prisma.match.findMany({
+          where: { tournamentId: id, status: "COMPLETED", completedAt: { not: null } },
+          include: { homeTeam: { select: { name: true } }, awayTeam: { select: { name: true } } },
+          orderBy: { completedAt: "desc" },
+          take: 10,
+        }),
+        prisma.registration.findMany({
+          where: { schema: { tournamentId: id }, status: "CONFIRMED" },
+          orderBy: { confirmedAt: "desc" },
+          take: 5,
+        }),
+      ]);
+
+      type ActivityEvent = { type: string; at: Date; label: string; detail?: string };
+      const events: ActivityEvent[] = [];
+
+      for (const m of recentMatches) {
+        if (!m.completedAt) continue;
+        events.push({
+          type: "match_result",
+          at: m.completedAt,
+          label: `${m.homeTeam?.name ?? "TBD"} ${m.homeScore} – ${m.awayScore} ${m.awayTeam?.name ?? "TBD"}`,
+        });
+      }
+
+      for (const r of recentRegistrations) {
+        if (!r.confirmedAt) continue;
+        const fd = r.formData as Record<string, any>;
+        const teamName = fd?.teamName ?? fd?.team_name ?? "Unknown team";
+        events.push({
+          type: "registration",
+          at: r.confirmedAt,
+          label: `${teamName} registered`,
+          detail: fd?.contactName || fd?.contact_name || undefined,
+        });
+      }
+
+      events.sort((a, b) => b.at.getTime() - a.at.getTime());
+
+      return reply.send({ success: true, data: events.slice(0, 12) });
+    }
+  );
+
   // Clone a tournament (structure + optionally teams, reset scores)
   app.post(
     "/api/tournaments/:id/clone",
