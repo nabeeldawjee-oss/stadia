@@ -1,6 +1,7 @@
 import { prisma } from "@stadia/db";
 import { stripe } from "../../lib/stripe";
 import { generateScoreToken } from "../referees/generate-token";
+import { sendEmail, registrationConfirmedHtml } from "../../lib/email";
 
 export async function createRegistrationIntent(tournamentId: string, formData: Record<string, any>) {
   const schema = await prisma.registrationSchema.findUnique({
@@ -38,6 +39,28 @@ export async function createRegistrationIntent(tournamentId: string, formData: R
   });
 
   if (total === 0) {
+    // Free registration — send confirmation immediately
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: { name: true, slug: true },
+    });
+    if (tournament && registration.contactEmail) {
+      const baseUrl = (process.env.WEB_BASE_URL || "https://stadia.app").split(",")[0].trim();
+      Promise.resolve().then(() =>
+        sendEmail({
+          to: registration.contactEmail,
+          subject: `Registration confirmed — ${tournament.name}`,
+          html: registrationConfirmedHtml({
+            tournamentName: tournament.name,
+            teamName: registration.teamName,
+            contactName: registration.contactName || registration.teamName,
+            entryFee: 0,
+            currency: "USD",
+            tournamentUrl: `${baseUrl}/t/${tournament.slug}`,
+          }),
+        })
+      ).catch(() => {});
+    }
     return { registration, clientSecret: null };
   }
 
@@ -58,7 +81,9 @@ export async function createRegistrationIntent(tournamentId: string, formData: R
 export async function confirmRegistrationPayment(paymentIntentId: string) {
   const registration = await prisma.registration.findFirst({
     where: { stripePaymentIntentId: paymentIntentId },
-    include: { tournament: true },
+    include: {
+      tournament: { include: { organizer: { select: { email: true } } } },
+    },
   });
   if (!registration) throw new Error("Registration not found");
 
@@ -76,6 +101,36 @@ export async function confirmRegistrationPayment(paymentIntentId: string) {
   });
 
   await generateScoreToken("TEAM", team.id, registration.tournamentId);
+
+  // Send confirmation emails (fire-and-forget)
+  const baseUrl = (process.env.WEB_BASE_URL || "https://stadia.app").split(",")[0].trim();
+  const tournamentUrl = `${baseUrl}/t/${registration.tournament.slug}`;
+  const { name: tournamentName, organizer } = registration.tournament;
+  const emailPayload = {
+    tournamentName,
+    teamName: registration.teamName,
+    contactName: registration.contactName || registration.teamName,
+    entryFee: registration.amountDue,
+    currency: "USD",
+    tournamentUrl,
+  };
+  Promise.all([
+    registration.contactEmail
+      ? sendEmail({ to: registration.contactEmail, subject: `Registration confirmed — ${tournamentName}`, html: registrationConfirmedHtml(emailPayload) })
+      : Promise.resolve(),
+    organizer.email
+      ? sendEmail({
+          to: organizer.email,
+          subject: `New registration: ${registration.teamName} — ${tournamentName}`,
+          html: `<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:32px">
+            <h1 style="font-size:20px;font-weight:800;color:#111827">New team registered</h1>
+            <p style="color:#374151"><strong>${registration.teamName}</strong> has paid and registered for <strong>${tournamentName}</strong>.</p>
+            <p style="color:#374151">Contact: ${registration.contactName} &lt;${registration.contactEmail}&gt;</p>
+            <a href="${baseUrl}/dashboard/tournaments/${registration.tournamentId}/registration" style="display:inline-block;background:#111827;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;margin:16px 0">View registration →</a>
+          </div>`,
+        })
+      : Promise.resolve(),
+  ]).catch(() => {});
 
   return { registration, team };
 }
