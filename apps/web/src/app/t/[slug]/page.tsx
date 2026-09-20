@@ -238,22 +238,32 @@ export default function PublicTournamentPage() {
           <span className={`inline-block mt-2 text-xs px-2 py-0.5 rounded-full font-medium ${tournament.status === "ACTIVE" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
             {tournament.status}
           </span>
-          {/* Share button */}
-          <button
-            onClick={() => {
-              const url = typeof window !== "undefined" ? window.location.href : "";
-              if (typeof navigator !== "undefined" && navigator.share) {
-                navigator.share({ title: tournament.name, text: `Follow ${tournament.name} live`, url });
-              } else {
-                const wa = `https://wa.me/?text=${encodeURIComponent(`Follow ${tournament.name} live: ${url}`)}`;
-                window.open(wa, "_blank", "noopener");
-              }
-            }}
-            className="absolute right-0 top-0 flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 transition"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
-            Share
-          </button>
+          {/* Action buttons */}
+          <div className="absolute right-0 top-0 flex items-center gap-2">
+            <Link
+              href={`/t/${slug}/print`}
+              target="_blank"
+              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 transition"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+              Print
+            </Link>
+            <button
+              onClick={() => {
+                const url = typeof window !== "undefined" ? window.location.href : "";
+                if (typeof navigator !== "undefined" && navigator.share) {
+                  navigator.share({ title: tournament.name, text: `Follow ${tournament.name} live`, url });
+                } else {
+                  const wa = `https://wa.me/?text=${encodeURIComponent(`Follow ${tournament.name} live: ${url}`)}`;
+                  window.open(wa, "_blank", "noopener");
+                }
+              }}
+              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 transition"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+              Share
+            </button>
+          </div>
         </div>
       </div>
 

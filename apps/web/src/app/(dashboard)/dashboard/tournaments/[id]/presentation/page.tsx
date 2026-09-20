@@ -107,6 +107,12 @@ export default function PresentationPage() {
               <Tv className="w-3.5 h-3.5" /> Open slideshow
             </a>
           </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-600 flex-1 font-mono bg-gray-50 px-3 py-2 rounded-lg truncate">/t/{slug}/print</span>
+            <a href={`/t/${slug}/print`} target="_blank" className="flex items-center gap-1.5 text-xs text-brand-600 hover:underline">
+              <ExternalLink className="w-3.5 h-3.5" /> Print / PDF
+            </a>
+          </div>
         </div>
       </div>
 
