@@ -20,10 +20,13 @@ interface Referee {
   scoreToken: { token: string } | null;
   assignments: Assignment[];
 }
-interface ScheduledMatch {
-  id: string; startTime: string;
-  field: { name: string };
-  match: { id: string; homeTeam?: { name: string } | null; awayTeam?: { name: string } | null; };
+interface AllMatch {
+  id: string;
+  homeTeam?: { name: string } | null;
+  awayTeam?: { name: string } | null;
+  status: string;
+  scheduledMatch?: { startTime: string; field: { name: string } } | null;
+  group?: { name: string; phase: { name: string } } | null;
 }
 
 export default function RefereesPage() {
@@ -41,11 +44,35 @@ export default function RefereesPage() {
     () => api.get(`/api/tournaments/${tournamentId}/referees`)
   );
 
-  const today = new Date().toISOString().split("T")[0];
-  const { data: todayMatches } = useSWR<ScheduledMatch[]>(
-    assigning ? `/api/tournaments/${tournamentId}/schedule?day=${today}` : null,
-    () => api.get(`/api/tournaments/${tournamentId}/schedule?day=${today}`)
+  interface DivisionData {
+    phases: { name: string; type: string; groups: { name: string; matches: AllMatch[] }[]; brackets: { matches: AllMatch[] }[] }[];
+  }
+  const { data: allDivisions } = useSWR<DivisionData[]>(
+    assigning ? `/api/tournaments/${tournamentId}/matches` : null,
+    () => api.get(`/api/tournaments/${tournamentId}/matches`)
   );
+
+  const allMatches: (AllMatch & { context: string })[] = [];
+  if (allDivisions) {
+    for (const div of allDivisions) {
+      for (const phase of div.phases) {
+        for (const group of phase.groups) {
+          for (const m of group.matches) {
+            if (m.homeTeam && m.awayTeam) {
+              allMatches.push({ ...m, context: `${phase.name} · ${group.name}` });
+            }
+          }
+        }
+        for (const bracket of phase.brackets) {
+          for (const m of bracket.matches) {
+            if (m.homeTeam && m.awayTeam) {
+              allMatches.push({ ...m, context: phase.name });
+            }
+          }
+        }
+      }
+    }
+  }
 
   const add = async () => {
     if (!name.trim()) return;
@@ -179,9 +206,9 @@ export default function RefereesPage() {
                         <div className="flex items-center gap-2 mb-2">
                           <select value={selectedMatch} onChange={(e) => setSelectedMatch(e.target.value)} className={`${inputCls} flex-1 text-xs`}>
                             <option value="">— pick a match —</option>
-                            {(todayMatches ?? []).map((sm) => (
-                              <option key={sm.match.id} value={sm.match.id}>
-                                {sm.match.homeTeam?.name ?? "TBD"} vs {sm.match.awayTeam?.name ?? "TBD"} · {sm.field.name} {new Date(sm.startTime).toLocaleTimeString("en-ZA", { timeZone: "UTC", hour: "2-digit", minute: "2-digit", hour12: false })}
+                            {allMatches.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.homeTeam?.name ?? "TBD"} vs {m.awayTeam?.name ?? "TBD"} · {m.context}
                               </option>
                             ))}
                           </select>
