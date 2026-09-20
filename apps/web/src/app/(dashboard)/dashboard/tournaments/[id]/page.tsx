@@ -522,6 +522,7 @@ export default function TournamentOverviewPage() {
       {transitionPhaseId && (
         <PhaseTransitionModal
           phaseId={transitionPhaseId}
+          tournamentId={id}
           onClose={handleTransitionClose}
           onStarted={handleTransitionStarted}
         />

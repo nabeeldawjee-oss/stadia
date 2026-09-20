@@ -2,6 +2,7 @@
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useAuthStore } from "@/lib/auth-store";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -148,6 +149,7 @@ function fmtDate(iso: string) {
 
 export default function PublicTournamentPage() {
   const { slug } = useParams<{ slug: string }>();
+  const { token: authToken } = useAuthStore();
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [schedule, setSchedule] = useState<ScheduledMatch[]>([]);
   const [tab, setTab] = useState<Tab>("standings");
@@ -157,6 +159,8 @@ export default function PublicTournamentPage() {
   const [statBoards, setStatBoards] = useState<StatBoard[]>([]);
   const [rankings, setRankings] = useState<{ rank: number; team: { id: string; name: string }; label: string }[]>([]);
   const [teams, setTeams] = useState<PublicTeam[]>([]);
+  const [following, setFollowing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
 
   const load = async () => {
     try {
@@ -180,6 +184,32 @@ export default function PublicTournamentPage() {
   };
 
   useEffect(() => { load(); const iv = setInterval(load, 30_000); return () => clearInterval(iv); }, [slug]);
+
+  // Load follow state for logged-in users
+  useEffect(() => {
+    if (!authToken || !tournament?.id) return;
+    fetch(`${API_URL}/api/tournaments/${tournament.id}/follow`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    }).then((r) => r.json()).then((d) => { if (d?.data?.following !== undefined) setFollowing(d.data.following); }).catch(() => {});
+  }, [authToken, tournament?.id]);
+
+  const toggleFollow = async () => {
+    if (!tournament?.id) return;
+    if (!authToken) {
+      window.location.href = `/sign-in?redirect=/t/${slug}`;
+      return;
+    }
+    setFollowLoading(true);
+    try {
+      const method = following ? "DELETE" : "POST";
+      await fetch(`${API_URL}/api/tournaments/${tournament.id}/follow`, {
+        method,
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      setFollowing(!following);
+    } catch {}
+    setFollowLoading(false);
+  };
 
   if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-400 text-sm">Loading…</div>;
   if (notFound || !tournament) return <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-500">Tournament not found</div>;
@@ -245,6 +275,18 @@ export default function PublicTournamentPage() {
           </span>
           {/* Action buttons */}
           <div className="absolute right-0 top-0 flex items-center gap-2">
+            <button
+              onClick={toggleFollow}
+              disabled={followLoading}
+              className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition disabled:opacity-50 ${
+                following
+                  ? "border-green-300 bg-green-50 text-green-700"
+                  : "border-gray-200 text-gray-500 hover:bg-gray-50"
+              }`}
+            >
+              <svg className="w-3.5 h-3.5" fill={following ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+              {following ? "Following" : "Follow"}
+            </button>
             <Link
               href={`/t/${slug}/print`}
               target="_blank"

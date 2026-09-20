@@ -399,4 +399,45 @@ export async function tournamentRoutes(app: FastifyInstance) {
       return reply.send({ success: true, data: divisions });
     }
   );
+
+  // Get follow status for a tournament (public, auth optional)
+  app.get(
+    "/api/tournaments/:id/follow",
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const follow = await prisma.tournamentFollow.findUnique({
+        where: { userId_tournamentId: { userId: request.userId!, tournamentId: id } },
+      });
+      return reply.send({ success: true, following: !!follow });
+    }
+  );
+
+  // Follow a tournament
+  app.post(
+    "/api/tournaments/:id/follow",
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      await prisma.tournamentFollow.upsert({
+        where: { userId_tournamentId: { userId: request.userId!, tournamentId: id } },
+        create: { userId: request.userId!, tournamentId: id },
+        update: {},
+      });
+      return reply.send({ success: true, following: true });
+    }
+  );
+
+  // Unfollow a tournament
+  app.delete(
+    "/api/tournaments/:id/follow",
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      await prisma.tournamentFollow.deleteMany({
+        where: { userId: request.userId!, tournamentId: id },
+      });
+      return reply.send({ success: true, following: false });
+    }
+  );
 }

@@ -3,7 +3,7 @@ import { useParams } from "next/navigation";
 import { useRef, useState } from "react";
 import useSWR from "swr";
 import { api } from "@/lib/api";
-import { Plus, Users, ChevronDown, ChevronRight, Trash2, Pencil, Check, X, Upload, AlertCircle, Link as LinkIcon } from "lucide-react";
+import { Plus, Users, ChevronDown, ChevronRight, Trash2, Pencil, Check, X, Upload, AlertCircle, Link as LinkIcon, Share2 } from "lucide-react";
 
 interface Player { id: string; name: string; number: number | null; position: string | null; dateOfBirth: string | null; }
 interface Team { id: string; name: string; logoUrl: string | null; paymentStatus: string; paymentAmount: number | null; players: Player[]; }
@@ -145,12 +145,22 @@ export default function TeamsPage() {
     if (fileRef.current) fileRef.current.value = "";
   };
 
-  const copyTeamLink = async (teamId: string) => {
+  const getTeamLink = async (teamId: string) => {
     const res = await api.post<{ token: string }>(`/api/teams/${teamId}/token`, {});
-    const base = window.location.origin;
-    navigator.clipboard.writeText(`${base}/team?token=${res.token}`);
+    return `${window.location.origin}/team?token=${res.token}`;
+  };
+
+  const copyTeamLink = async (teamId: string) => {
+    const link = await getTeamLink(teamId);
+    navigator.clipboard.writeText(link);
     setCopiedTeamId(teamId);
     setTimeout(() => setCopiedTeamId(null), 2000);
+  };
+
+  const shareTeamLinkWhatsApp = async (teamId: string, teamName: string) => {
+    const link = await getTeamLink(teamId);
+    const text = encodeURIComponent(`Hi ${teamName}! Here is your team portal link for the tournament: ${link}`);
+    window.open(`https://wa.me/?text=${text}`, "_blank", "noopener");
   };
 
   const paid = (teams ?? []).filter((t) => t.paymentStatus === "PAID").length;
@@ -254,8 +264,11 @@ export default function TeamsPage() {
                     </>
                   ) : (
                     <>
-                      <button onClick={(e) => { e.stopPropagation(); copyTeamLink(team.id); }} title="Copy team link" className="text-gray-400 hover:text-brand-600 p-1">
+                      <button onClick={(e) => { e.stopPropagation(); copyTeamLink(team.id); }} title="Copy team portal link" className="text-gray-400 hover:text-brand-600 p-1">
                         {copiedTeamId === team.id ? <Check className="w-3.5 h-3.5 text-green-500" /> : <LinkIcon className="w-3.5 h-3.5" />}
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); shareTeamLinkWhatsApp(team.id, team.name); }} title="Send portal link via WhatsApp" className="text-gray-400 hover:text-green-600 p-1">
+                        <Share2 className="w-3.5 h-3.5" />
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); setEditingTeamId(team.id); setEditTeamName(team.name); }} className="text-gray-400 hover:text-brand-600 p-1"><Pencil className="w-3.5 h-3.5" /></button>
                       <button onClick={(e) => { e.stopPropagation(); deleteTeam(team.id); }} className="text-gray-400 hover:text-red-500 p-1"><Trash2 className="w-4 h-4" /></button>

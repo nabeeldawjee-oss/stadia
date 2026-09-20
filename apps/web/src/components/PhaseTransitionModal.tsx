@@ -2,7 +2,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { api } from "@/lib/api";
-import { X, Trophy, ArrowRight, CheckCircle, AlertCircle } from "lucide-react";
+import { X, Trophy, ArrowRight, CheckCircle, AlertCircle, ExternalLink } from "lucide-react";
 
 interface Team { id: string; name: string; }
 interface Standing { position: number; team: Team; played: number; wins: number; draws: number; losses: number; goalsFor: number; goalsAgainst: number; points: number; }
@@ -18,11 +18,12 @@ interface AdvancePreview {
 
 interface Props {
   phaseId: string;
+  tournamentId?: string;
   onClose: () => void;
   onStarted: () => void;
 }
 
-export default function PhaseTransitionModal({ phaseId, onClose, onStarted }: Props) {
+export default function PhaseTransitionModal({ phaseId, tournamentId, onClose, onStarted }: Props) {
   const [starting, setStarting] = useState(false);
   const { data: preview } = useSWR<AdvancePreview>(
     `/api/phases/${phaseId}/advance-preview`,
@@ -118,11 +119,20 @@ export default function PhaseTransitionModal({ phaseId, onClose, onStarted }: Pr
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                       <div className="flex items-start gap-2.5">
                         <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                        <div>
+                        <div className="flex-1">
                           <p className="text-sm font-medium text-amber-800">Bracket slots not configured</p>
                           <p className="text-xs text-amber-600 mt-1">
-                            Go to Format → Knockout phase and assign group positions to each bracket slot.
+                            Assign group positions to bracket slots before starting the next phase.
                           </p>
+                          {preview.nextPhase && tournamentId && (
+                            <a
+                              href={`/dashboard/tournaments/${tournamentId}/format/phases/${preview.nextPhase.id}/advancement`}
+                              className="inline-flex items-center gap-1 mt-2 text-xs font-semibold text-amber-700 hover:underline"
+                            >
+                              Configure advancement rules
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
                         </div>
                       </div>
                     </div>
