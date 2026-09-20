@@ -5,6 +5,7 @@ import { authenticate } from "../middleware/authenticate";
 import { assertTournamentAccess } from "../engines/auth/permissions";
 import { createRegistrationIntent, confirmRegistrationPayment } from "../engines/registration/process-registration";
 import { stripe } from "../lib/stripe";
+import { sendEmail, registrationConfirmedHtml } from "../lib/email";
 
 const schemaBody = z.object({
   entryFee: z.number().min(0).optional(),
@@ -128,7 +129,36 @@ export async function registrationRoutes(app: FastifyInstance) {
     if (!reg) return reply.code(404).send({ success: false, error: "Not found" });
     await assertTournamentAccess(req.userId!, reg.schema.tournamentId, "manage_registration");
 
-    const updated = await prisma.registration.update({ where: { id: registrationId }, data: { status } });
+    const updated = await prisma.registration.update({
+      where: { id: registrationId },
+      data: { status, ...(status === "CONFIRMED" ? { confirmedAt: new Date() } : {}) },
+      include: { schema: { select: { tournamentId: true, tournament: { select: { name: true, slug: true, branding: { select: { primaryColor: true } } } }, entryFee: true, currency: true } } },
+    });
+
+    // Send confirmation email non-blocking
+    if (status === "CONFIRMED") {
+      const formData = updated.formData as Record<string, string> ?? {};
+      const contactEmail = formData["email"] ?? formData["contact_email"] ?? formData["contactEmail"] ?? "";
+      const teamName = formData["team_name"] ?? formData["teamName"] ?? formData["name"] ?? "Your team";
+      const contactName = formData["contact_name"] ?? formData["contactName"] ?? formData["name"] ?? "Team manager";
+      const webBase = (process.env.WEB_BASE_URL || "http://localhost:3001").split(",")[0].trim();
+      const tournamentUrl = `${webBase}/t/${updated.schema.tournament.slug}`;
+      if (contactEmail) {
+        sendEmail({
+          to: contactEmail,
+          subject: `Registration confirmed — ${updated.schema.tournament.name}`,
+          html: registrationConfirmedHtml({
+            tournamentName: updated.schema.tournament.name,
+            teamName,
+            contactName,
+            entryFee: updated.schema.entryFee,
+            currency: updated.schema.currency,
+            tournamentUrl,
+          }),
+        }).catch(() => {});
+      }
+    }
+
     return reply.send({ success: true, data: updated });
   });
 
