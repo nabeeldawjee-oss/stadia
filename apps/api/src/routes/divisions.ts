@@ -305,6 +305,10 @@ export async function divisionRoutes(app: FastifyInstance) {
     const group = await prisma.group.findUnique({ where: { id: groupId }, include: { phase: { include: { division: true } } } });
     if (!group) return reply.code(404).send({ success: false, error: "Not found" });
     await assertTournamentAccess(req.userId!, group.phase.division.tournamentId, "manage_general");
+    const existingCount = await prisma.match.count({ where: { groupId } });
+    if (existingCount > 0) {
+      return reply.code(409).send({ success: false, error: "Matches already generated for this group. Delete them first to regenerate." });
+    }
     await generateGroupMatches(groupId);
     return reply.send({ success: true, data: null });
   });
