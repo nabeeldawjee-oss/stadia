@@ -410,17 +410,27 @@ export default function PublicTournamentPage() {
                     {date === today && <span className="px-1.5 py-0.5 rounded-full text-white text-xs font-bold" style={{ backgroundColor: primary }}>TODAY</span>}
                   </div>
                   <div className="space-y-2">
-                    {dayMatches.map((sm) => (
-                      <div key={sm.matchId} className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-3">
-                        <div className="text-xs font-mono text-gray-400 w-10 shrink-0">{fmtTime(sm.startTime)}</div>
-                        <div className="text-xs text-gray-300 shrink-0">{sm.field?.name}</div>
-                        <div className="flex-1 flex items-center justify-center gap-3 text-sm font-medium">
-                          <span className="text-gray-700">{sm.match.homeTeam?.name ?? "TBD"}</span>
-                          <span className="text-gray-300 text-xs">vs</span>
-                          <span className="text-gray-700">{sm.match.awayTeam?.name ?? "TBD"}</span>
+                    {dayMatches.map((sm) => {
+                      const isLive = sm.match.status === "IN_PROGRESS";
+                      return (
+                        <div key={sm.matchId} className={`bg-white rounded-xl px-4 py-3 flex items-center gap-3 ${isLive ? "border-2" : "border border-gray-200"}`} style={isLive ? { borderColor: primary } : {}}>
+                          <div className="text-xs font-mono text-gray-400 w-10 shrink-0">{fmtTime(sm.startTime)}</div>
+                          <div className="text-xs text-gray-300 shrink-0">{sm.field?.name}</div>
+                          <div className="flex-1 flex items-center justify-center gap-3 text-sm font-medium">
+                            <span className="text-gray-700">{sm.match.homeTeam?.name ?? "TBD"}</span>
+                            {isLive ? (
+                              <span className="flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: primary }}>
+                                <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                                LIVE
+                              </span>
+                            ) : (
+                              <span className="text-gray-300 text-xs">vs</span>
+                            )}
+                            <span className="text-gray-700">{sm.match.awayTeam?.name ?? "TBD"}</span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ))
