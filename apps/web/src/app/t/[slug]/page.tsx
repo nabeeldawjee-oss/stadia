@@ -36,6 +36,7 @@ interface Bracket {
 }
 interface Phase { id: string; name: string; type: string; groups: Group[]; brackets: Bracket[]; }
 interface Division { id: string; name: string; phases: Phase[]; }
+interface Post { id: string; title: string; body: string; published: boolean; publishedAt: string | null; }
 interface Tournament {
   id: string;
   name: string;
@@ -45,6 +46,7 @@ interface Tournament {
   branding?: { primaryColor?: string; logoUrl?: string } | null;
   divisions: Division[];
   registration?: { isOpen: boolean; entryFee: number; currency: string } | null;
+  posts?: Post[];
 }
 interface ScheduledMatch {
   matchId: string;
@@ -53,7 +55,7 @@ interface ScheduledMatch {
   match: { homeTeam: { name: string } | null; awayTeam: { name: string } | null; homeScore: number | null; awayScore: number | null; status: string };
 }
 
-type Tab = "standings" | "fixtures" | "results" | "bracket" | "stats";
+type Tab = "standings" | "fixtures" | "results" | "bracket" | "stats" | "news";
 
 interface StatEntry { player: { id: string; name: string; team: { name: string } } | null; total: number; }
 interface StatBoard { statDef: { id: string; name: string; key: string }; entries: StatEntry[]; }
@@ -183,6 +185,8 @@ export default function PublicTournamentPage() {
   const allBrackets = tournament.divisions.flatMap(d => d.phases.filter(p => p.type === "KNOCKOUT").flatMap(p => p.brackets));
   const hasKnockout = allBrackets.length > 0;
   const hasStats = statBoards.length > 0;
+  const publishedPosts = (tournament.posts ?? []).filter((p) => p.published !== false);
+  const hasPosts = publishedPosts.length > 0;
 
   // Group schedule by date
   const byDate: Record<string, ScheduledMatch[]> = {};
@@ -260,7 +264,7 @@ export default function PublicTournamentPage() {
       {/* Tabs */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 flex gap-0">
-          {(["standings", "fixtures", "results", ...(hasKnockout ? ["bracket" as Tab] : []), ...(hasStats ? ["stats" as Tab] : [])] as Tab[]).map((t) => (
+          {(["standings", "fixtures", "results", ...(hasKnockout ? ["bracket" as Tab] : []), ...(hasStats ? ["stats" as Tab] : []), ...(hasPosts ? ["news" as Tab] : [])] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -523,6 +527,24 @@ export default function PublicTournamentPage() {
                 </div>
               ))
             )}
+          </div>
+        )}
+        {/* NEWS TAB */}
+        {tab === "news" && (
+          <div className="space-y-4">
+            {publishedPosts.map((post) => (
+              <div key={post.id} className="bg-white border border-gray-200 rounded-2xl p-5">
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <h3 className="font-semibold text-gray-900 text-base leading-snug">{post.title}</h3>
+                  {post.publishedAt && (
+                    <p className="text-xs text-gray-400 shrink-0 mt-0.5">
+                      {new Date(post.publishedAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
+                    </p>
+                  )}
+                </div>
+                <p className="text-sm text-gray-600 whitespace-pre-wrap leading-relaxed">{post.body}</p>
+              </div>
+            ))}
           </div>
         )}
       </div>
