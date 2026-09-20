@@ -319,6 +319,7 @@ export async function divisionRoutes(app: FastifyInstance) {
     const group = await prisma.group.findUnique({
       where: { id: groupId },
       include: {
+        phase: { select: { id: true, status: true, division: { select: { id: true } } } },
         teams: { include: { team: true } },
         matches: {
           include: { homeTeam: true, awayTeam: true, scheduledMatch: { include: { field: true } } },

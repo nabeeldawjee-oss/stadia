@@ -11,6 +11,7 @@ interface Bracket { id: string; size: number; }
 interface Phase { id: string; name: string; type: string; status: string; groups: Group[]; brackets: Bracket[]; }
 interface GroupPhase { id: string; name: string; groups: Group[]; }
 interface Division { id: string; name: string; matchDurationMinutes: number; halfDurationMinutes: number; phases: Phase[]; }
+interface PhaseProgress { id: string; totalMatches: number; completedMatches: number; }
 
 interface StandingRow { position: number; team: { id: string; name: string }; points: number; played: number; wins: number; draws: number; losses: number; goalDifference: number; }
 interface Seeding { groupId: string | null; groupName: string; position: number; team: { id: string; name: string } | null; toPhaseName: string; toBracketSlot: { roundNumber: number; position: number } | null; }
@@ -174,6 +175,11 @@ export default function DivisionPage() {
   const [halfDuration, setHalfDuration] = useState("");
   const [savingDurations, setSavingDurations] = useState(false);
 
+  const { data: phaseProgress, mutate: mutateProgress } = useSWR<PhaseProgress[]>(
+    `/api/tournaments/${tournamentId}/progress`,
+    () => api.get(`/api/tournaments/${tournamentId}/progress`)
+  );
+
   const { data: division, mutate } = useSWR<Division>(
     `/api/divisions/${divisionId}`,
     async () => {
@@ -226,7 +232,7 @@ export default function DivisionPage() {
     setAdvancing(phaseId);
     try {
       await api.post(`/api/phases/${phaseId}/start`, { force });
-      await mutate();
+      await Promise.all([mutate(), mutateProgress()]);
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -358,10 +364,37 @@ export default function DivisionPage() {
                   )}
                 </div>
               </div>
-              <div className="px-5 py-3 text-xs text-gray-400">
-                {phase.type === "GROUP_STAGE"
-                  ? `${phase.groups?.length ?? 0} group(s)`
-                  : `${phase.brackets?.length ?? 0} bracket(s)`}
+              <div className="px-5 py-3">
+                {(() => {
+                  const prog = phaseProgress?.find((p) => p.id === phase.id);
+                  const label = phase.type === "GROUP_STAGE"
+                    ? `${phase.groups?.length ?? 0} group(s)`
+                    : `${phase.brackets?.length ?? 0} bracket(s)`;
+                  return (
+                    <div className="flex items-center gap-4">
+                      <span className="text-xs text-gray-400">{label}</span>
+                      {prog && prog.totalMatches > 0 && (
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{
+                                width: `${Math.round((prog.completedMatches / prog.totalMatches) * 100)}%`,
+                                backgroundColor: prog.completedMatches === prog.totalMatches ? "#16a34a" : "#2563eb",
+                              }}
+                            />
+                          </div>
+                          <span className={`text-xs font-medium shrink-0 ${prog.completedMatches === prog.totalMatches ? "text-green-600" : "text-gray-500"}`}>
+                            {prog.completedMatches}/{prog.totalMatches}
+                          </span>
+                          {prog.completedMatches === prog.totalMatches && phase.status === "ACTIVE" && (
+                            <span className="text-xs text-green-600 font-medium shrink-0">All done!</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
               {/* Inline bracket panel */}
               {phase.type === "KNOCKOUT" && expandedBracketPhaseId === phase.id && (

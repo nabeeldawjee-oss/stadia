@@ -3,7 +3,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import useSWR from "swr";
 import { api } from "@/lib/api";
-import { UserPlus, Zap, RefreshCw, Trash2 } from "lucide-react";
+import { UserPlus, Zap, RefreshCw, Trash2, CheckCircle2 } from "lucide-react";
 import ScoreEntryModal from "@/components/ScoreEntryModal";
 
 interface Team { id: string; name: string; }
@@ -18,7 +18,14 @@ interface Match {
   status: string;
   scheduledMatch?: { startTime: string; field: { name: string } } | null;
 }
-interface GroupDetail { id: string; name: string; teams: GroupTeam[]; standings: Standing[]; matches: Match[]; }
+interface GroupDetail {
+  id: string;
+  name: string;
+  phase: { id: string; status: string; division: { id: string } };
+  teams: GroupTeam[];
+  standings: Standing[];
+  matches: Match[];
+}
 
 export default function GroupDetailPage() {
   const { id: tournamentId, groupId } = useParams<{ id: string; groupId: string }>();
@@ -74,6 +81,10 @@ export default function GroupDetailPage() {
     COMPLETED: "text-gray-600",
   };
 
+  const allMatchesDone = !!group && group.matches.length > 0 && group.matches.every((m) => m.status === "COMPLETED");
+  const phaseIsActive = group?.phase?.status === "ACTIVE";
+  const divisionId = group?.phase?.division?.id;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -81,6 +92,19 @@ export default function GroupDetailPage() {
         <span>/</span>
         <span className="text-gray-900 font-medium">{group?.name}</span>
       </div>
+
+      {allMatchesDone && phaseIsActive && divisionId && (
+        <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+          <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+          <div className="flex-1 text-sm text-green-800 font-medium">All matches in this group are complete.</div>
+          <button
+            onClick={() => router.push(`/dashboard/tournaments/${tournamentId}/format/divisions/${divisionId}`)}
+            className="text-xs font-semibold text-green-700 bg-green-100 border border-green-300 px-3 py-1.5 rounded-lg hover:bg-green-200 transition shrink-0"
+          >
+            Advance phase →
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-6">
         {/* Teams */}
