@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { api } from "@/lib/api";
 import { useForm } from "react-hook-form";
-import { Copy, Check, ExternalLink, Tv, Megaphone, Code } from "lucide-react";
+import { Copy, Check, ExternalLink, Tv, Megaphone, Code, Mail } from "lucide-react";
 
 interface Tournament { id: string; slug: string; name: string; }
 interface Branding { primaryColor?: string; secondaryColor?: string; fontFamily?: string; logoUrl?: string; bannerUrl?: string; customCss?: string; }
@@ -24,6 +24,11 @@ export default function PresentationPage() {
   const [showAnnounceForm, setShowAnnounceForm] = useState(false);
   const [announceTitle, setAnnounceTitle] = useState("");
   const [announceBody, setAnnounceBody] = useState("");
+  const [showBroadcastForm, setShowBroadcastForm] = useState(false);
+  const [broadcastTitle, setBroadcastTitle] = useState("");
+  const [broadcastBody, setBroadcastBody] = useState("");
+  const [broadcasting, setBroadcasting] = useState(false);
+  const [broadcastMsg, setBroadcastMsg] = useState<string | null>(null);
 
   const { data: tournament } = useSWR<Tournament>(`/api/tournaments/${tournamentId}`, () => api.get(`/api/tournaments/${tournamentId}`));
   const { data: branding, mutate: mutateBranding } = useSWR<Branding>(`/api/tournaments/${tournamentId}/branding`, () => api.get(`/api/tournaments/${tournamentId}/branding`));
@@ -83,6 +88,20 @@ export default function PresentationPage() {
     } catch (e: any) {
       setAnnounceMsg(e.message || "Failed to send");
     } finally { setAnnouncing(false); }
+  };
+
+  const sendBroadcast = async () => {
+    if (!broadcastTitle.trim()) return;
+    setBroadcasting(true); setBroadcastMsg(null);
+    try {
+      const res = await api.post<{ recipientCount: number }>(`/api/tournaments/${tournamentId}/broadcast`, {
+        title: broadcastTitle, body: broadcastBody,
+      });
+      setBroadcastMsg(`Sent to ${res.recipientCount} registered team contact${res.recipientCount !== 1 ? "s" : ""}`);
+      setBroadcastTitle(""); setBroadcastBody(""); setShowBroadcastForm(false);
+    } catch (e: any) {
+      setBroadcastMsg(e.message || "Failed to send");
+    } finally { setBroadcasting(false); }
   };
 
   const slug = tournament?.slug ?? "";
@@ -268,6 +287,32 @@ export default function PresentationPage() {
             <div className="flex gap-2">
               <button onClick={sendAnnouncement} disabled={announcing || !announceTitle.trim()} className="bg-amber-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-40">{announcing ? "Sending..." : "Send"}</button>
               <button onClick={() => setShowAnnounceForm(false)} className="bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium">Cancel</button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Broadcast to registered teams */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-6">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="font-semibold text-gray-900">Email registered teams</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Sends directly to the contact email of every confirmed registration</p>
+          </div>
+          <button onClick={() => setShowBroadcastForm(true)} className="flex items-center gap-1.5 text-xs bg-brand-600 text-white px-3 py-1.5 rounded-lg hover:bg-brand-700 transition">
+            <Mail className="w-3.5 h-3.5" /> Send email
+          </button>
+        </div>
+        {broadcastMsg && (
+          <p className="text-xs text-green-600 bg-green-50 rounded-lg px-3 py-2 mb-2">{broadcastMsg}</p>
+        )}
+        {showBroadcastForm && (
+          <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+            <input value={broadcastTitle} onChange={(e) => setBroadcastTitle(e.target.value)} placeholder="Subject / title" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            <textarea value={broadcastBody} onChange={(e) => setBroadcastBody(e.target.value)} placeholder="Message body..." rows={3} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none" />
+            <div className="flex gap-2">
+              <button onClick={sendBroadcast} disabled={broadcasting || !broadcastTitle.trim()} className="bg-brand-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-40">{broadcasting ? "Sending..." : "Send to teams"}</button>
+              <button onClick={() => setShowBroadcastForm(false)} className="bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium">Cancel</button>
             </div>
           </div>
         )}

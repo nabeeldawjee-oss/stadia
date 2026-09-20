@@ -199,6 +199,58 @@ export async function presentationRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: { post, recipientCount: tournament?.follows.length ?? 0 } });
   });
 
+  // Broadcast email to all confirmed registered team contacts
+  app.post("/api/tournaments/:tournamentId/broadcast", { preHandler: authenticate }, async (req, reply) => {
+    const { tournamentId } = req.params as { tournamentId: string };
+    await assertTournamentAccess(req.userId!, tournamentId, "manage_presentation");
+    const body = announceSchema.parse(req.body);
+
+    const [tournament, registrations] = await Promise.all([
+      prisma.tournament.findUnique({ where: { id: tournamentId }, select: { name: true, slug: true } }),
+      prisma.registration.findMany({
+        where: { schema: { tournamentId }, status: "CONFIRMED" },
+        select: { formData: true },
+      }),
+    ]);
+
+    if (!tournament) return reply.code(404).send({ success: false, error: "Not found" });
+
+    const baseUrl = process.env.WEB_BASE_URL || "https://stadia.app";
+    const tournamentUrl = tournament.slug ? `${baseUrl}/t/${tournament.slug}` : baseUrl;
+
+    // Collect unique contact emails from registration formData
+    const emails = new Set<string>();
+    for (const r of registrations) {
+      const fd = r.formData as Record<string, any>;
+      const email = fd?.contactEmail ?? fd?.contact_email ?? fd?.email;
+      if (email && typeof email === "string" && email.includes("@")) {
+        emails.add(email.toLowerCase());
+      }
+    }
+
+    const recipientCount = emails.size;
+
+    if (recipientCount > 0) {
+      Promise.all(
+        [...emails].map((email) =>
+          sendEmail({
+            to: email,
+            subject: `${body.title} — ${tournament.name}`,
+            html: `<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:32px">
+              <h1 style="font-size:20px;font-weight:800;color:#111827">${body.title}</h1>
+              <p style="color:#374151">${body.body.replace(/\n/g, "<br>")}</p>
+              <a href="${tournamentUrl}" style="display:inline-block;background:#16a34a;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;margin:16px 0">View tournament →</a>
+              <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+              <p style="color:#9ca3af;font-size:12px">Stadia · Message from the ${tournament.name} organiser.</p>
+            </div>`,
+          })
+        )
+      ).catch(() => {});
+    }
+
+    return reply.send({ success: true, data: { recipientCount } });
+  });
+
   // Public slideshow endpoint
   app.get("/api/public/t/:slug/slideshow", async (req, reply) => {
     const { slug } = req.params as { slug: string };
