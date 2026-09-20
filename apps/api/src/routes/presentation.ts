@@ -4,6 +4,7 @@ import { prisma } from "@stadia/db";
 import QRCode from "qrcode";
 import { authenticate } from "../middleware/authenticate";
 import { assertTournamentAccess } from "../engines/auth/permissions";
+import { sendEmail } from "../lib/email";
 
 const brandingSchema = z.object({
   primaryColor: z.string().optional(),
@@ -166,16 +167,35 @@ export async function presentationRoutes(app: FastifyInstance) {
       },
     });
 
-    // Get followers' device tokens
-    const follows = await prisma.tournamentFollow.findMany({
-      where: { tournamentId },
-      include: { user: { include: { deviceTokens: true } } },
+    // Get followers for email + push
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: { name: true, slug: true, follows: { select: { user: { select: { email: true, name: true } } } } },
     });
-    const tokens = follows.flatMap((f) => f.user.deviceTokens.map((dt) => dt.token));
 
-    // Fire-and-forget push (tokens collected, actual push delivery handled by notification service)
-    // For now we store in post and return the token list for the caller to use
-    return reply.send({ success: true, data: { post, recipientCount: tokens.length } });
+    const baseUrl = process.env.WEB_BASE_URL || "https://stadia.app";
+    const tournamentUrl = tournament?.slug ? `${baseUrl}/t/${tournament.slug}` : baseUrl;
+
+    // Fire-and-forget email to all followers
+    if (tournament?.follows.length) {
+      Promise.all(
+        tournament.follows.map((f) =>
+          sendEmail({
+            to: f.user.email,
+            subject: `${body.title} — ${tournament.name}`,
+            html: `<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:32px">
+              <h1 style="font-size:20px;font-weight:800;color:#111827">${body.title}</h1>
+              <p style="color:#374151">${body.body.replace(/\n/g, "<br>")}</p>
+              <a href="${tournamentUrl}" style="display:inline-block;background:#16a34a;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;margin:16px 0">View tournament →</a>
+              <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+              <p style="color:#9ca3af;font-size:12px">Stadia · You're receiving this because you follow ${tournament.name}.</p>
+            </div>`,
+          })
+        )
+      ).catch(() => {});
+    }
+
+    return reply.send({ success: true, data: { post, recipientCount: tournament?.follows.length ?? 0 } });
   });
 
   // Public slideshow endpoint
