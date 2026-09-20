@@ -7,6 +7,7 @@ interface AuthState {
   email: string | null;
   name: string | null;
   setAuth: (token: string, userId: string, email: string, name: string) => void;
+  setName: (name: string) => void;
   clearAuth: () => void;
 }
 
@@ -21,6 +22,7 @@ export const useAuthStore = create<AuthState>()(
         localStorage.setItem("stadia_token", token);
         set({ token, userId, email, name });
       },
+      setName: (name) => set({ name }),
       clearAuth: () => {
         localStorage.removeItem("stadia_token");
         set({ token: null, userId: null, email: null, name: null });

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/lib/auth-store";
-import { Trophy, LayoutDashboard, LogOut } from "lucide-react";
+import { Trophy, LayoutDashboard, LogOut, UserCircle } from "lucide-react";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { token, clearAuth, name } = useAuthStore();
@@ -43,6 +43,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
         <div className="border-t border-gray-200 pt-4 mt-4">
           <p className="text-xs text-gray-500 px-3 mb-2 truncate">{name}</p>
+          <Link
+            href="/account"
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition ${
+              pathname === "/account" ? "bg-brand-50 text-brand-700" : "text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            <UserCircle className="w-4 h-4" />
+            Account
+          </Link>
           <button
             onClick={() => { clearAuth(); router.push("/sign-in"); }}
             className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50 w-full transition"
