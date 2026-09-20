@@ -112,29 +112,36 @@ export default function ScoreEntryModal({ match, tournamentId, isOverride, token
           {match.homeTeam?.name} vs {match.awayTeam?.name}
         </p>
 
-        {/* Score inputs */}
-        <div className="flex items-center gap-4 mb-4">
-          <div className="flex-1 text-center">
-            <p className="text-xs font-medium text-gray-500 mb-1">{match.homeTeam?.name}</p>
-            <input
-              type="number"
-              min="0"
-              value={home}
-              onChange={(e) => setHome(e.target.value)}
-              className="w-full text-center text-3xl font-bold border-2 border-gray-200 rounded-xl py-3 focus:outline-none focus:border-brand-500"
-            />
-          </div>
-          <span className="text-2xl font-bold text-gray-300 pt-5">–</span>
-          <div className="flex-1 text-center">
-            <p className="text-xs font-medium text-gray-500 mb-1">{match.awayTeam?.name}</p>
-            <input
-              type="number"
-              min="0"
-              value={away}
-              onChange={(e) => setAway(e.target.value)}
-              className="w-full text-center text-3xl font-bold border-2 border-gray-200 rounded-xl py-3 focus:outline-none focus:border-brand-500"
-            />
-          </div>
+        {/* Score inputs — large tap targets for mobile */}
+        <div className="flex items-center gap-3 mb-4">
+          {[
+            { label: match.homeTeam?.name, val: home, set: setHome },
+            { label: match.awayTeam?.name, val: away, set: setAway },
+          ].map((side, i) => {
+            const n = parseInt(side.val, 10) || 0;
+            return (
+              <div key={i} className={`flex-1 text-center ${i === 0 ? "" : ""}`}>
+                <p className="text-xs font-medium text-gray-500 mb-2 truncate">{side.label}</p>
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => side.set(String(Math.max(0, n - 1)))}
+                    className="w-11 h-11 rounded-xl border-2 border-gray-200 text-gray-500 text-xl font-bold hover:border-gray-400 hover:bg-gray-50 active:scale-95 transition flex items-center justify-center select-none"
+                  >
+                    −
+                  </button>
+                  <span className="w-12 text-center text-4xl font-bold text-gray-900 tabular-nums">{n}</span>
+                  <button
+                    type="button"
+                    onClick={() => side.set(String(n + 1))}
+                    className="w-11 h-11 rounded-xl border-2 border-brand-400 text-brand-600 text-xl font-bold hover:border-brand-500 hover:bg-brand-50 active:scale-95 transition flex items-center justify-center select-none"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         {isOverride && (

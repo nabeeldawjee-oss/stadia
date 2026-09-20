@@ -44,6 +44,35 @@ export async function scoreRoutes(app: FastifyInstance) {
     }
   });
 
+  // Token-based match status update (referee marks IN_PROGRESS)
+  app.put("/api/scores/status", async (req, reply) => {
+    const { token } = req.query as { token?: string };
+    if (!token) return reply.code(401).send({ success: false, error: "Token required" });
+
+    try {
+      const { matchId, status } = z.object({
+        matchId: z.string(),
+        status: z.enum(["IN_PROGRESS", "SCHEDULED"]),
+      }).parse(req.body);
+
+      const ctx = await resolveToken(token);
+      if (ctx.type !== "REFEREE") return reply.code(403).send({ success: false, error: "Referee token required" });
+
+      const assigned = await prisma.refAssignment.findFirst({
+        where: { refereeId: ctx.entityId, matchId },
+      });
+      if (!assigned) return reply.code(403).send({ success: false, error: "Not assigned to this match" });
+
+      const updated = await prisma.match.update({
+        where: { id: matchId },
+        data: { status },
+      });
+      return reply.send({ success: true, data: updated });
+    } catch (err: any) {
+      return reply.code(400).send({ success: false, error: err.message });
+    }
+  });
+
   // Token-based score entry (referee or team)
   app.post("/api/scores", async (req, reply) => {
     const { token } = req.query as { token?: string };

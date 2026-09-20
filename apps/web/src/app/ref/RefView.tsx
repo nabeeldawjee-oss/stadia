@@ -4,6 +4,7 @@ import useSWR from "swr";
 import { useState } from "react";
 import { apiFetch } from "@/lib/api";
 import ScoreEntryModal from "@/components/ScoreEntryModal";
+import { Play } from "lucide-react";
 
 
 interface Team { id: string; name: string; }
@@ -24,6 +25,7 @@ export default function RefView() {
   const params = useSearchParams();
   const token = params.get("token");
   const [scoring, setScoring] = useState<Match | null>(null);
+  const [starting, setStarting] = useState<string | null>(null);
 
   const { data: referee, error, mutate } = useSWR<Referee>(
     token ? `/api/ref?token=${token}` : null,
@@ -98,12 +100,31 @@ export default function RefView() {
                     )}
                   </div>
                 </div>
-                {a.match.status !== "COMPLETED" && a.match.homeTeam && a.match.awayTeam && (
+                {a.match.status === "SCHEDULED" && a.match.homeTeam && a.match.awayTeam && (
+                  <button
+                    onClick={async () => {
+                      setStarting(a.match.id);
+                      try {
+                        await apiFetch(`/api/scores/status?token=${encodeURIComponent(token!)}`, {
+                          method: "PUT",
+                          body: JSON.stringify({ matchId: a.match.id, status: "IN_PROGRESS" }),
+                        });
+                        mutate();
+                      } catch { /* silent */ } finally { setStarting(null); }
+                    }}
+                    disabled={starting === a.match.id}
+                    className="mt-3 w-full flex items-center justify-center gap-2 bg-green-600 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition"
+                  >
+                    <Play className="w-4 h-4 fill-white" />
+                    {starting === a.match.id ? "Starting..." : "Start match"}
+                  </button>
+                )}
+                {a.match.status === "IN_PROGRESS" && a.match.homeTeam && a.match.awayTeam && (
                   <button
                     onClick={() => setScoring(a.match)}
-                    className="mt-3 w-full bg-brand-600 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-brand-700 transition"
+                    className="mt-3 w-full bg-brand-600 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-brand-700 transition"
                   >
-                    Enter score
+                    Enter final score
                   </button>
                 )}
               </div>
