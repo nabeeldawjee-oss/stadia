@@ -51,7 +51,10 @@ interface ScheduledMatch {
   match: { homeTeam: { name: string } | null; awayTeam: { name: string } | null; homeScore: number | null; awayScore: number | null; status: string };
 }
 
-type Tab = "standings" | "fixtures" | "results" | "bracket";
+type Tab = "standings" | "fixtures" | "results" | "bracket" | "stats";
+
+interface StatEntry { player: { id: string; name: string; team: { name: string } } | null; total: number; }
+interface StatBoard { statDef: { id: string; name: string; key: string }; entries: StatEntry[]; }
 
 function PublicBracket({ bracket, primary }: { bracket: Bracket; primary: string }) {
   const totalRounds = Math.log2(bracket.size);
@@ -146,18 +149,21 @@ export default function PublicTournamentPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [activeDivision, setActiveDivision] = useState<string | null>(null);
+  const [statBoards, setStatBoards] = useState<StatBoard[]>([]);
 
   const load = async () => {
     try {
-      const [tRes, sRes] = await Promise.all([
+      const [tRes, sRes, stRes] = await Promise.all([
         fetch(`${API_URL}/api/public/t/${slug}`),
         fetch(`${API_URL}/api/public/t/${slug}/schedule`),
+        fetch(`${API_URL}/api/public/t/${slug}/stats`),
       ]);
       if (!tRes.ok) { setNotFound(true); setLoading(false); return; }
       const t = await tRes.json();
       setTournament(t.data);
       if (t.data?.divisions?.[0]) setActiveDivision(t.data.divisions[0].id);
       if (sRes.ok) { const s = await sRes.json(); setSchedule(s.data ?? []); }
+      if (stRes.ok) { const st = await stRes.json(); setStatBoards(st.data ?? []); }
     } catch { setNotFound(true); }
     setLoading(false);
   };
@@ -171,6 +177,7 @@ export default function PublicTournamentPage() {
   const division = tournament.divisions.find((d) => d.id === activeDivision);
   const allBrackets = tournament.divisions.flatMap(d => d.phases.filter(p => p.type === "KNOCKOUT").flatMap(p => p.brackets));
   const hasKnockout = allBrackets.length > 0;
+  const hasStats = statBoards.length > 0;
 
   // Group schedule by date
   const byDate: Record<string, ScheduledMatch[]> = {};
@@ -228,7 +235,7 @@ export default function PublicTournamentPage() {
       {/* Tabs */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 flex gap-0">
-          {(["standings", "fixtures", "results", ...(hasKnockout ? ["bracket" as Tab] : [])] as Tab[]).map((t) => (
+          {(["standings", "fixtures", "results", ...(hasKnockout ? ["bracket" as Tab] : []), ...(hasStats ? ["stats" as Tab] : [])] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -423,6 +430,37 @@ export default function PublicTournamentPage() {
                   </div>
                 ))}
               </>
+            )}
+          </div>
+        )}
+
+        {/* STATS TAB */}
+        {tab === "stats" && (
+          <div className="space-y-6">
+            {statBoards.length === 0 ? (
+              <div className="text-center py-12 text-gray-400 text-sm">No stats recorded yet</div>
+            ) : (
+              statBoards.map((board) => (
+                <div key={board.statDef.id} className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+                  <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
+                    <h3 className="font-semibold text-gray-900 text-sm">{board.statDef.name}</h3>
+                  </div>
+                  <div className="divide-y divide-gray-50">
+                    {board.entries.map((entry, i) => (
+                      <div key={i} className="px-5 py-3 flex items-center gap-3">
+                        <span className={`w-6 text-center text-xs font-bold shrink-0 ${i === 0 ? "text-yellow-500" : i === 1 ? "text-gray-400" : i === 2 ? "text-amber-600" : "text-gray-300"}`}>
+                          {i + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{entry.player?.name ?? "Unknown"}</p>
+                          <p className="text-xs text-gray-400 truncate">{entry.player?.team?.name}</p>
+                        </div>
+                        <span className="text-lg font-black tabular-nums shrink-0" style={{ color: primary }}>{entry.total}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))
             )}
           </div>
         )}
