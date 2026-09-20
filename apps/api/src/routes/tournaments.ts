@@ -378,6 +378,10 @@ export async function tournamentRoutes(app: FastifyInstance) {
                     include: { homeTeam: true, awayTeam: true },
                     orderBy: [{ roundNumber: "asc" }, { createdAt: "asc" }],
                   },
+                  standings: {
+                    include: { team: { select: { id: true, name: true } } },
+                    orderBy: { position: "asc" },
+                  },
                 },
                 orderBy: { name: "asc" },
               },

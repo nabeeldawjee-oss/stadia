@@ -4,7 +4,7 @@ import useSWR from "swr";
 import { api } from "@/lib/api";
 import { useState } from "react";
 import ScoreEntryModal from "@/components/ScoreEntryModal";
-import { Zap, CheckCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { Zap, CheckCircle, ChevronDown, ChevronUp, BarChart2 } from "lucide-react";
 
 interface Team { id: string; name: string; }
 interface Match {
@@ -17,7 +17,8 @@ interface Match {
   status: string;
   contextType: string;
 }
-interface Group { id: string; name: string; matches: Match[]; }
+interface Standing { position: number; team: { id: string; name: string }; played: number; wins: number; draws: number; losses: number; goalDifference: number; points: number; }
+interface Group { id: string; name: string; matches: Match[]; standings: Standing[]; }
 interface Bracket { id: string; size: number; matches: Match[]; }
 interface Phase { id: string; name: string; type: string; status: string; groups: Group[]; brackets: Bracket[]; }
 interface Division { id: string; name: string; phases: Phase[]; }
@@ -130,6 +131,45 @@ export default function MatchesPage() {
                               {group.matches.map((match) => (
                                 <MatchRow key={match.id} match={match} tournamentId={tournamentId} onScore={() => setScoring(match)} />
                               ))}
+                            </div>
+                          )}
+                          {/* Inline live standings */}
+                          {group.standings.length > 0 && (
+                            <div className="border-t border-gray-100 bg-gray-50/40">
+                              <div className="px-5 py-2 flex items-center gap-1.5">
+                                <BarChart2 className="w-3 h-3 text-gray-400" />
+                                <span className="text-xs font-medium text-gray-500">Standings</span>
+                              </div>
+                              <div className="px-5 pb-3 overflow-x-auto">
+                                <table className="w-full text-xs min-w-[360px]">
+                                  <thead>
+                                    <tr className="text-gray-400 text-right">
+                                      <th className="text-left font-medium pb-1 w-6">#</th>
+                                      <th className="text-left font-medium pb-1">Team</th>
+                                      <th className="font-medium pb-1 w-7">P</th>
+                                      <th className="font-medium pb-1 w-7">W</th>
+                                      <th className="font-medium pb-1 w-7">D</th>
+                                      <th className="font-medium pb-1 w-7">L</th>
+                                      <th className="font-medium pb-1 w-10">GD</th>
+                                      <th className="font-bold pb-1 w-8 text-gray-600">Pts</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-100">
+                                    {group.standings.map((row, i) => (
+                                      <tr key={row.team.id} className={i < 2 ? "text-gray-800" : "text-gray-400"}>
+                                        <td className="py-1 text-gray-400">{row.position}</td>
+                                        <td className="py-1 font-medium truncate max-w-[140px]">{row.team.name}</td>
+                                        <td className="py-1 text-right">{row.played}</td>
+                                        <td className="py-1 text-right">{row.wins}</td>
+                                        <td className="py-1 text-right">{row.draws}</td>
+                                        <td className="py-1 text-right">{row.losses}</td>
+                                        <td className="py-1 text-right">{row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}</td>
+                                        <td className="py-1 text-right font-bold text-gray-700">{row.points}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
                             </div>
                           )}
                         </div>
