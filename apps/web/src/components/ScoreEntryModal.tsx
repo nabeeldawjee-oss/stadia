@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { api, apiFetch } from "@/lib/api";
-import { X, Plus, Trash2 } from "lucide-react";
+import { X, Plus, Trash2, Flag } from "lucide-react";
 import useSWR from "swr";
 
 interface Team { id: string; name: string; }
@@ -60,13 +60,7 @@ export default function ScoreEntryModal({ match, tournamentId, isOverride, token
     setStatRows((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const save = async () => {
-    const homeScore = parseInt(home, 10);
-    const awayScore = parseInt(away, 10);
-    if (isNaN(homeScore) || isNaN(awayScore)) {
-      setError("Enter valid scores");
-      return;
-    }
+  const submitScore = async (homeScore: number, awayScore: number, overrideReason?: string) => {
     setSaving(true);
     setError(null);
     try {
@@ -81,7 +75,7 @@ export default function ScoreEntryModal({ match, tournamentId, isOverride, token
           body: JSON.stringify({ matchId: match.id, ...payload }),
         });
       } else if (isOverride) {
-        payload.reason = reason;
+        payload.reason = overrideReason ?? reason;
         await api.put(`/api/matches/${match.id}/score/override`, payload);
       } else {
         await api.post(`/api/matches/${match.id}/score`, payload);
@@ -92,6 +86,24 @@ export default function ScoreEntryModal({ match, tournamentId, isOverride, token
     } finally {
       setSaving(false);
     }
+  };
+
+  const save = async () => {
+    const homeScore = parseInt(home, 10);
+    const awayScore = parseInt(away, 10);
+    if (isNaN(homeScore) || isNaN(awayScore)) {
+      setError("Enter valid scores");
+      return;
+    }
+    await submitScore(homeScore, awayScore);
+  };
+
+  const walkover = async (winner: "home" | "away") => {
+    const hs = winner === "home" ? 3 : 0;
+    const as = winner === "away" ? 3 : 0;
+    setHome(String(hs));
+    setAway(String(as));
+    await submitScore(hs, as, "Walkover");
   };
 
   const allPlayers = (teamId: string) => {
@@ -238,6 +250,37 @@ export default function ScoreEntryModal({ match, tournamentId, isOverride, token
               </div>
             )}
           </>
+        )}
+
+        {/* Walkover shortcut — only for new scores, not overrides */}
+        {!isOverride && !token && match.homeTeam && match.awayTeam && (
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="flex-1 h-px bg-gray-100" />
+              <span className="text-xs text-gray-400 font-medium flex items-center gap-1">
+                <Flag className="w-3 h-3" /> Walkover / no-show
+              </span>
+              <div className="flex-1 h-px bg-gray-100" />
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => walkover("home")}
+                className="flex-1 text-xs font-medium py-2 px-3 rounded-lg border border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 disabled:opacity-50 transition truncate"
+              >
+                {match.homeTeam.name} wins W/O
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => walkover("away")}
+                className="flex-1 text-xs font-medium py-2 px-3 rounded-lg border border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 disabled:opacity-50 transition truncate"
+              >
+                {match.awayTeam.name} wins W/O
+              </button>
+            </div>
+          </div>
         )}
 
         {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
