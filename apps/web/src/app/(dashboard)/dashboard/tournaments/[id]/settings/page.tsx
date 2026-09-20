@@ -6,7 +6,8 @@ import { api } from "@/lib/api";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Trash2 } from "lucide-react";
+import { Trash2, Copy } from "lucide-react";
+import { useState } from "react";
 
 const schema = z.object({
   name: z.string().min(2),
@@ -28,6 +29,8 @@ export default function SettingsPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { mutate: globalMutate } = useSWRConfig();
+  const [cloning, setCloning] = useState(false);
+  const [cloneName, setCloneName] = useState("");
   const { data: t, mutate } = useSWR<Tournament>(`/api/tournaments/${id}`, () => api.get(`/api/tournaments/${id}`));
 
   const { register, handleSubmit, reset, formState: { isSubmitting, errors, isDirty } } = useForm<FormValues>({
@@ -60,6 +63,20 @@ export default function SettingsPage() {
     if (!confirm("Permanently delete this tournament? This cannot be undone.")) return;
     await api.delete(`/api/tournaments/${id}`);
     router.push("/dashboard");
+  };
+
+  const handleClone = async () => {
+    setCloning(true);
+    try {
+      const result = await api.post<{ id: string; slug: string }>(`/api/tournaments/${id}/clone`, {
+        name: cloneName.trim() || undefined,
+        includeTeams: true,
+      });
+      router.push(`/dashboard/tournaments/${result.id}`);
+    } catch (err: any) {
+      alert(err.message || "Clone failed");
+      setCloning(false);
+    }
   };
 
   const inputCls = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
@@ -122,6 +139,28 @@ export default function SettingsPage() {
             {isSubmitting ? "Saving..." : "Save changes"}
           </button>
         </form>
+      </div>
+
+      {/* Clone tournament */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-6">
+        <h2 className="font-semibold text-gray-900 mb-1">Clone tournament</h2>
+        <p className="text-sm text-gray-500 mb-4">Creates a copy with the same format structure and teams, in Draft status with no matches or scores.</p>
+        <div className="flex gap-3">
+          <input
+            value={cloneName}
+            onChange={(e) => setCloneName(e.target.value)}
+            placeholder={t ? `${t.name} (copy)` : "New tournament name"}
+            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+          <button
+            onClick={handleClone}
+            disabled={cloning}
+            className="flex items-center gap-2 text-sm font-medium bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 disabled:opacity-40 transition"
+          >
+            <Copy className="w-4 h-4" />
+            {cloning ? "Cloning..." : "Clone"}
+          </button>
+        </div>
       </div>
 
       <div className="bg-white border border-red-200 rounded-2xl p-6">

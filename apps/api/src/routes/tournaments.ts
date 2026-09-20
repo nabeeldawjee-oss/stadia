@@ -440,4 +440,97 @@ export async function tournamentRoutes(app: FastifyInstance) {
       return reply.send({ success: true, following: false });
     }
   );
+
+  // Clone a tournament (structure + optionally teams, reset scores)
+  app.post(
+    "/api/tournaments/:id/clone",
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const { name, includeTeams = true } = (request.body as any) ?? {};
+      await assertTournamentAccess(request.userId!, id, "manage_general");
+
+      const source = await prisma.tournament.findUnique({
+        where: { id },
+        include: {
+          divisions: {
+            include: {
+              phases: {
+                include: {
+                  groups: { include: { groupTeams: { select: { teamId: true } } } },
+                  brackets: true,
+                },
+                orderBy: { orderIndex: "asc" },
+              },
+            },
+            orderBy: { orderIndex: "asc" },
+          },
+        },
+      });
+      if (!source) return reply.code(404).send({ success: false, error: "Not found" });
+
+      const newName = name || `${source.name} (copy)`;
+      const slug = await uniqueSlug(newName);
+
+      const tournament = await prisma.$transaction(async (tx) => {
+        const t = await tx.tournament.create({
+          data: {
+            name: newName,
+            slug,
+            sport: source.sport,
+            description: source.description,
+            timezone: source.timezone,
+            status: "DRAFT",
+            organizerId: request.userId!,
+          },
+        });
+
+        for (const div of source.divisions) {
+          const newDiv = await tx.division.create({
+            data: { tournamentId: t.id, name: div.name, orderIndex: div.orderIndex },
+          });
+
+          for (const phase of div.phases) {
+            const newPhase = await tx.phase.create({
+              data: {
+                divisionId: newDiv.id,
+                name: phase.name,
+                type: phase.type,
+                orderIndex: phase.orderIndex,
+                status: "PENDING",
+              },
+            });
+
+            // Clone groups (with teams if requested)
+            for (const group of phase.groups) {
+              const newGroup = await tx.group.create({
+                data: { phaseId: newPhase.id, name: group.name },
+              });
+              if (includeTeams && group.groupTeams.length) {
+                await tx.groupTeam.createMany({
+                  data: group.groupTeams.map((gt) => ({ groupId: newGroup.id, teamId: gt.teamId })),
+                  skipDuplicates: true,
+                });
+              }
+            }
+
+            // Clone bracket shells (no matches)
+            for (const bracket of phase.brackets) {
+              await tx.bracket.create({
+                data: {
+                  phaseId: newPhase.id,
+                  size: bracket.size,
+                  thirdPlaceMatch: bracket.thirdPlaceMatch,
+                },
+              });
+            }
+          }
+        }
+
+        return t;
+      });
+
+      return reply.code(201).send({ success: true, data: { id: tournament.id, slug: tournament.slug } });
+    }
+  );
 }
