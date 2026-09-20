@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { api } from "@/lib/api";
 import { useForm } from "react-hook-form";
-import { Copy, Check, ExternalLink, Tv, Megaphone } from "lucide-react";
+import { Copy, Check, ExternalLink, Tv, Megaphone, Code } from "lucide-react";
 
 interface Tournament { id: string; slug: string; name: string; }
 interface Branding { primaryColor?: string; secondaryColor?: string; fontFamily?: string; logoUrl?: string; bannerUrl?: string; customCss?: string; }
@@ -14,6 +14,7 @@ interface Post { id: string; title: string; body: string; published: boolean; cr
 export default function PresentationPage() {
   const { id: tournamentId } = useParams<{ id: string }>();
   const [copied, setCopied] = useState(false);
+  const [copiedEmbed, setCopiedEmbed] = useState(false);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [showPostForm, setShowPostForm] = useState(false);
   const [postTitle, setPostTitle] = useState("");
@@ -115,6 +116,36 @@ export default function PresentationPage() {
           </div>
         </div>
       </div>
+
+      {/* Embed widget */}
+      {slug && (
+        <div className="bg-white border border-gray-200 rounded-2xl p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <Code className="w-4 h-4 text-gray-400" />
+            <h2 className="font-semibold text-gray-900">Embed standings</h2>
+          </div>
+          <p className="text-xs text-gray-400 mb-4">Paste this on any website to show live standings. Updates automatically.</p>
+          {(() => {
+            const origin = typeof window !== "undefined" ? window.location.origin : "";
+            const src = `${origin}/embed/t/${slug}/standings`;
+            const code = `<iframe src="${src}" width="100%" height="400" frameborder="0" style="border-radius:12px;border:1px solid #e5e7eb;"></iframe>`;
+            return (
+              <div className="relative">
+                <pre className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs font-mono text-gray-700 whitespace-pre-wrap break-all">{code}</pre>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(code); setCopiedEmbed(true); setTimeout(() => setCopiedEmbed(false), 2000); }}
+                  className="absolute top-2 right-2 p-1.5 bg-white border border-gray-200 rounded-lg text-gray-400 hover:text-brand-600 transition"
+                >
+                  {copiedEmbed ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            );
+          })()}
+          <a href={`/embed/t/${slug}/standings`} target="_blank" className="inline-flex items-center gap-1.5 text-xs text-brand-600 hover:underline mt-3">
+            <ExternalLink className="w-3.5 h-3.5" /> Preview embed
+          </a>
+        </div>
+      )}
 
       {/* QR Code */}
       <div className="bg-white border border-gray-200 rounded-2xl p-6">
