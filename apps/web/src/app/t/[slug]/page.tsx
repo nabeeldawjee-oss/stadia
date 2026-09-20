@@ -151,13 +151,15 @@ export default function PublicTournamentPage() {
   const [notFound, setNotFound] = useState(false);
   const [activeDivision, setActiveDivision] = useState<string | null>(null);
   const [statBoards, setStatBoards] = useState<StatBoard[]>([]);
+  const [rankings, setRankings] = useState<{ rank: number; team: { id: string; name: string }; label: string }[]>([]);
 
   const load = async () => {
     try {
-      const [tRes, sRes, stRes] = await Promise.all([
+      const [tRes, sRes, stRes, rRes] = await Promise.all([
         fetch(`${API_URL}/api/public/t/${slug}`),
         fetch(`${API_URL}/api/public/t/${slug}/schedule`),
         fetch(`${API_URL}/api/public/t/${slug}/stats`),
+        fetch(`${API_URL}/api/public/t/${slug}/ranking`),
       ]);
       if (!tRes.ok) { setNotFound(true); setLoading(false); return; }
       const t = await tRes.json();
@@ -165,6 +167,7 @@ export default function PublicTournamentPage() {
       if (t.data?.divisions?.[0]) setActiveDivision(t.data.divisions[0].id);
       if (sRes.ok) { const s = await sRes.json(); setSchedule(s.data ?? []); }
       if (stRes.ok) { const st = await stRes.json(); setStatBoards(st.data ?? []); }
+      if (rRes.ok) { const r = await rRes.json(); setRankings(r.data ?? []); }
     } catch { setNotFound(true); }
     setLoading(false);
   };
@@ -322,6 +325,40 @@ export default function PublicTournamentPage() {
         {/* BRACKET TAB */}
         {tab === "bracket" && (
           <div className="space-y-6">
+            {/* Podium — shown when final is complete */}
+            {rankings.length > 0 && (() => {
+              const champion = rankings.find((r) => r.rank === 1);
+              const runnerUp = rankings.find((r) => r.rank === 2);
+              const third = rankings.find((r) => r.rank === 3);
+              return (
+                <div className="bg-white border border-gray-200 rounded-2xl px-6 py-5 text-center">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">Final standings</p>
+                  <div className="flex items-end justify-center gap-4">
+                    {runnerUp && (
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-3xl">🥈</span>
+                        <Link href={`/t/${slug}/teams/${runnerUp.team.id}`} className="text-sm font-semibold text-gray-700 hover:underline max-w-[110px] text-center">{runnerUp.team.name}</Link>
+                        <span className="text-xs text-gray-400">Runner-up</span>
+                      </div>
+                    )}
+                    {champion && (
+                      <div className="flex flex-col items-center gap-1 -mt-4">
+                        <span className="text-4xl">🏆</span>
+                        <Link href={`/t/${slug}/teams/${champion.team.id}`} className="text-base font-bold hover:underline max-w-[130px] text-center" style={{ color: primary }}>{champion.team.name}</Link>
+                        <span className="text-xs font-semibold text-yellow-600">Champion</span>
+                      </div>
+                    )}
+                    {third && (
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-3xl">🥉</span>
+                        <Link href={`/t/${slug}/teams/${third.team.id}`} className="text-sm font-semibold text-gray-700 hover:underline max-w-[110px] text-center">{third.team.name}</Link>
+                        <span className="text-xs text-gray-400">3rd Place</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
             {allBrackets.map((bracket) => (
               <PublicBracket key={bracket.id} bracket={bracket} primary={primary} />
             ))}

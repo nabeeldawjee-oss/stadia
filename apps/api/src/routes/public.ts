@@ -130,6 +130,80 @@ export async function publicRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: result });
   });
 
+  // Public rankings (champion / runner-up / etc.)
+  app.get("/api/public/t/:slug/ranking", async (req, reply) => {
+    const { slug } = req.params as { slug: string };
+    const tournament = await prisma.tournament.findUnique({
+      where: { slug },
+      select: { id: true, status: true },
+    });
+    if (!tournament || tournament.status === "DRAFT") {
+      return reply.code(404).send({ success: false, error: "Not found" });
+    }
+
+    const divisions = await prisma.division.findMany({
+      where: { tournamentId: tournament.id },
+      include: {
+        phases: {
+          where: { type: "KNOCKOUT" },
+          include: {
+            brackets: {
+              include: {
+                matches: {
+                  where: { status: "COMPLETED" },
+                  include: { homeTeam: true, awayTeam: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    type RankEntry = { rank: number; team: { id: string; name: string }; label: string };
+    const rankings: RankEntry[] = [];
+
+    for (const division of divisions) {
+      for (const phase of division.phases) {
+        for (const bracket of phase.brackets) {
+          if (bracket.matches.length === 0) continue;
+          const byRound: Record<number, typeof bracket.matches> = {};
+          for (const m of bracket.matches) {
+            const r = m.roundNumber ?? 1;
+            if (!byRound[r]) byRound[r] = [];
+            byRound[r].push(m);
+          }
+          const maxRound = Math.max(...Object.keys(byRound).map(Number));
+          let rank = 1;
+          for (let r = maxRound; r >= 1; r--) {
+            const matches = byRound[r] ?? [];
+            const roundsFromFinal = maxRound - r;
+            if (roundsFromFinal === 0) {
+              for (const m of matches) {
+                if (m.homeScore === null || m.awayScore === null) continue;
+                const winner = m.homeScore >= m.awayScore ? m.homeTeam : m.awayTeam;
+                const loser = m.homeScore >= m.awayScore ? m.awayTeam : m.homeTeam;
+                if (winner) rankings.push({ rank: 1, team: { id: winner.id, name: winner.name }, label: "Champion" });
+                if (loser) rankings.push({ rank: 2, team: { id: loser.id, name: loser.name }, label: "Runner-up" });
+              }
+              rank = 3;
+            } else {
+              const label = roundsFromFinal === 1 ? "3rd – 4th Place" : `Top ${rank} – ${rank + matches.length - 1}`;
+              for (const m of matches) {
+                if (m.homeScore === null || m.awayScore === null) continue;
+                const loser = m.homeScore >= m.awayScore ? m.awayTeam : m.homeTeam;
+                if (loser) rankings.push({ rank, team: { id: loser.id, name: loser.name }, label });
+              }
+              rank += matches.length;
+            }
+          }
+        }
+      }
+    }
+
+    return reply.send({ success: true, data: rankings.sort((a, b) => a.rank - b.rank) });
+  });
+
   // Public team page
   app.get("/api/public/t/:slug/teams/:teamId", async (req, reply) => {
     const { slug, teamId } = req.params as { slug: string; teamId: string };
