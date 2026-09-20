@@ -2,6 +2,38 @@ import type { FastifyInstance } from "fastify";
 import { prisma } from "@stadia/db";
 
 export async function publicRoutes(app: FastifyInstance) {
+  // Public tournament directory
+  app.get("/api/public/tournaments", async (req, reply) => {
+    const { q, sport } = req.query as { q?: string; sport?: string };
+    const where: Record<string, unknown> = {
+      status: { in: ["PUBLISHED", "ACTIVE", "COMPLETED"] },
+    };
+    if (q) {
+      where.name = { contains: q, mode: "insensitive" };
+    }
+    if (sport) {
+      where.sport = { equals: sport, mode: "insensitive" };
+    }
+    const tournaments = await prisma.tournament.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        sport: true,
+        status: true,
+        startDate: true,
+        endDate: true,
+        description: true,
+        branding: { select: { primaryColor: true, logoUrl: true } },
+        _count: { select: { teams: true } },
+      },
+      orderBy: [{ status: "asc" }, { startDate: "desc" }],
+      take: 100,
+    });
+    return reply.send({ success: true, data: tournaments });
+  });
+
   // Tournament by slug (no auth required)
   app.get("/api/public/t/:slug", async (req, reply) => {
     const { slug } = req.params as { slug: string };
