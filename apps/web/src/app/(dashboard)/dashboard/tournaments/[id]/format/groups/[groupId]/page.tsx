@@ -8,7 +8,7 @@ import ScoreEntryModal from "@/components/ScoreEntryModal";
 
 interface Team { id: string; name: string; }
 interface GroupTeam { team: Team; }
-interface Standing { position: number; team: Team; played: number; won: number; drawn: number; lost: number; goalsFor: number; goalsAgainst: number; goalDifference: number; points: number; }
+interface Standing { position: number; team: Team; played: number; wins: number; draws: number; losses: number; goalsFor: number; goalsAgainst: number; goalDifference: number; points: number; }
 interface Match {
   id: string;
   homeTeam: Team | null;
@@ -145,9 +145,9 @@ export default function GroupDetailPage() {
                     <td className="px-4 py-2 text-gray-400">{row.position}</td>
                     <td className="px-4 py-2 font-medium text-gray-900">{row.team.name}</td>
                     <td className="text-center px-2 py-2 text-gray-600">{row.played}</td>
-                    <td className="text-center px-2 py-2 text-gray-600">{row.won}</td>
-                    <td className="text-center px-2 py-2 text-gray-600">{row.drawn}</td>
-                    <td className="text-center px-2 py-2 text-gray-600">{row.lost}</td>
+                    <td className="text-center px-2 py-2 text-gray-600">{row.wins}</td>
+                    <td className="text-center px-2 py-2 text-gray-600">{row.draws}</td>
+                    <td className="text-center px-2 py-2 text-gray-600">{row.losses}</td>
                     <td className="text-center px-2 py-2 text-gray-600">{row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}</td>
                     <td className="text-center px-2 py-2 font-bold text-gray-900">{row.points}</td>
                   </tr>
