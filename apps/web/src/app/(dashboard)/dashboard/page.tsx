@@ -3,10 +3,23 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { api } from "@/lib/api";
-import { Plus, Trophy, ChevronRight, Calendar, X, Users, GitBranch, CheckCircle, ArrowRight } from "lucide-react";
+import { Plus, Trophy, ChevronRight, Calendar, X, Users, GitBranch, CheckCircle, ArrowRight, Clock, MapPin } from "lucide-react";
 
 interface Tournament {
   id: string; name: string; sport: string; status: string; slug: string; createdAt: string;
+}
+
+interface TodayMatch {
+  matchId: string;
+  startTime: string;
+  endTime: string;
+  field: string;
+  status: string;
+  homeScore: number | null;
+  awayScore: number | null;
+  homeTeam: string;
+  awayTeam: string;
+  tournament: { id: string; name: string; slug: string; sport: string };
 }
 
 type WizardStep = "info" | "teams" | "done";
@@ -238,6 +251,62 @@ function SetupWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (
   );
 }
 
+function TodaySection({ router }: { router: ReturnType<typeof useRouter> }) {
+  const { data: matches } = useSWR<TodayMatch[]>("/api/tournaments/today", () => api.get("/api/tournaments/today"));
+
+  if (!matches || matches.length === 0) return null;
+
+  const matchStatusColor: Record<string, string> = {
+    PENDING: "bg-gray-100 text-gray-600",
+    SCHEDULED: "bg-blue-100 text-blue-700",
+    IN_PROGRESS: "bg-amber-100 text-amber-700",
+    COMPLETED: "bg-green-100 text-green-700",
+    CANCELLED: "bg-red-100 text-red-600",
+  };
+
+  return (
+    <div className="mb-8">
+      <div className="flex items-center gap-2 mb-3">
+        <Calendar className="w-4 h-4 text-brand-600" />
+        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Today's Matches</h2>
+        <span className="text-xs bg-brand-100 text-brand-700 font-semibold px-2 py-0.5 rounded-full">{matches.length}</span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {matches.map((m) => {
+          const start = new Date(m.startTime);
+          const timeStr = start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          const isCompleted = m.status === "COMPLETED";
+          return (
+            <div
+              key={m.matchId}
+              onClick={() => router.push(`/dashboard/tournaments/${m.tournament.id}`)}
+              className="bg-white border border-gray-200 rounded-xl px-4 py-3 cursor-pointer hover:border-brand-300 hover:shadow-sm transition"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-brand-600 truncate max-w-[60%]">{m.tournament.name}</span>
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${matchStatusColor[m.status] ?? "bg-gray-100 text-gray-600"}`}>
+                  {m.status === "IN_PROGRESS" ? "Live" : m.status.charAt(0) + m.status.slice(1).toLowerCase()}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-gray-900 truncate flex-1 text-right">{m.homeTeam}</span>
+                <span className="text-sm font-bold text-gray-500 shrink-0 tabular-nums px-2">
+                  {isCompleted ? `${m.homeScore ?? 0} – ${m.awayScore ?? 0}` : "vs"}
+                </span>
+                <span className="text-sm font-semibold text-gray-900 truncate flex-1">{m.awayTeam}</span>
+              </div>
+              <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
+                <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{timeStr}</span>
+                <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{m.field}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [showWizard, setShowWizard] = useState(false);
@@ -280,6 +349,8 @@ export default function DashboardPage() {
           onCreated={handleCreated}
         />
       )}
+
+      <TodaySection router={router} />
 
       {!tournaments ? (
         <div className="text-center py-12 text-gray-400">Loading...</div>

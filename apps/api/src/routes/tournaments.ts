@@ -34,6 +34,58 @@ async function uniqueSlug(base: string): Promise<string> {
 }
 
 export async function tournamentRoutes(app: FastifyInstance) {
+  // Today's matches across all the user's tournaments
+  app.get(
+    "/api/tournaments/today",
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+      const scheduled = await prisma.scheduledMatch.findMany({
+        where: {
+          startTime: { gte: startOfDay, lte: endOfDay },
+          match: {
+            tournament: {
+              OR: [
+                { organizerId: request.userId! },
+                { admins: { some: { userId: request.userId! } } },
+              ],
+            },
+          },
+        },
+        include: {
+          match: {
+            include: {
+              tournament: { select: { id: true, name: true, slug: true, sport: true } },
+              homeTeam: { select: { id: true, name: true } },
+              awayTeam: { select: { id: true, name: true } },
+            },
+          },
+          field: { select: { id: true, name: true } },
+        },
+        orderBy: { startTime: "asc" },
+      });
+
+      return reply.send({
+        success: true,
+        data: scheduled.map((s) => ({
+          matchId: s.matchId,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          field: s.field.name,
+          status: s.match.status,
+          homeScore: s.match.homeScore,
+          awayScore: s.match.awayScore,
+          homeTeam: s.match.homeTeam?.name ?? "TBD",
+          awayTeam: s.match.awayTeam?.name ?? "TBD",
+          tournament: s.match.tournament,
+        })),
+      });
+    }
+  );
+
   // List my tournaments
   app.get(
     "/api/tournaments",
