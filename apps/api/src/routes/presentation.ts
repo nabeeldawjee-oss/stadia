@@ -4,7 +4,7 @@ import { prisma } from "@stadia/db";
 import QRCode from "qrcode";
 import { authenticate } from "../middleware/authenticate";
 import { assertTournamentAccess } from "../engines/auth/permissions";
-import { sendEmail } from "../lib/email";
+import { sendEmail, unsubscribeUrl } from "../lib/email";
 
 const brandingSchema = z.object({
   primaryColor: z.string().optional(),
@@ -170,7 +170,7 @@ export async function presentationRoutes(app: FastifyInstance) {
     // Get followers for email + push
     const tournament = await prisma.tournament.findUnique({
       where: { id: tournamentId },
-      select: { name: true, slug: true, follows: { select: { user: { select: { email: true, name: true } } } } },
+      select: { name: true, slug: true, follows: { select: { userId: true, user: { select: { email: true, name: true } } } } },
     });
 
     const baseUrl = process.env.WEB_BASE_URL || "https://stadia.app";
@@ -179,8 +179,9 @@ export async function presentationRoutes(app: FastifyInstance) {
     // Fire-and-forget email to all followers
     if (tournament?.follows.length) {
       Promise.all(
-        tournament.follows.map((f) =>
-          sendEmail({
+        tournament.follows.map((f) => {
+          const unsub = unsubscribeUrl(f.userId, tournamentId);
+          return sendEmail({
             to: f.user.email,
             subject: `${body.title} — ${tournament.name}`,
             html: `<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:32px">
@@ -188,10 +189,10 @@ export async function presentationRoutes(app: FastifyInstance) {
               <p style="color:#374151">${body.body.replace(/\n/g, "<br>")}</p>
               <a href="${tournamentUrl}" style="display:inline-block;background:#16a34a;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;margin:16px 0">View tournament →</a>
               <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
-              <p style="color:#9ca3af;font-size:12px">Stadia · You're receiving this because you follow ${tournament.name}.</p>
+              <p style="color:#9ca3af;font-size:12px">Stadia · You're receiving this because you follow ${tournament.name}. · <a href="${unsub}" style="color:#9ca3af">Unsubscribe</a></p>
             </div>`,
-          })
-        )
+          });
+        })
       ).catch(() => {});
     }
 

@@ -2,7 +2,7 @@ import { prisma } from "@stadia/db";
 import { recalculateStandings } from "../standings/recalculate";
 import { advanceBracketWinner } from "../format/advance-bracket-winner";
 import type { SubmitScoreBody } from "@stadia/types";
-import { sendEmail, scoreAlertHtml } from "../../lib/email";
+import { sendEmail, scoreAlertHtml, unsubscribeUrl } from "../../lib/email";
 
 type ScoreSource =
   | { type: "organizer"; userId: string }
@@ -86,7 +86,7 @@ async function sendScoreAlerts(matchId: string, homeScore: number, awayScore: nu
       tournamentId: true,
       homeTeam: { select: { name: true } },
       awayTeam: { select: { name: true } },
-      tournament: { select: { name: true, slug: true, follows: { select: { user: { select: { email: true, name: true } } } } } },
+      tournament: { select: { name: true, slug: true, follows: { select: { userId: true, user: { select: { email: true, name: true } } } } } },
     },
   });
   if (!match || !match.homeTeam || !match.awayTeam) return;
@@ -106,6 +106,7 @@ async function sendScoreAlerts(matchId: string, homeScore: number, awayScore: nu
         homeScore,
         awayScore,
         tournamentUrl,
+        unsubUrl: unsubscribeUrl(follow.userId, match.tournamentId),
       }),
     }).catch(() => {});
   }

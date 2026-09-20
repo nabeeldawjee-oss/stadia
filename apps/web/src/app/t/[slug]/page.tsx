@@ -190,7 +190,7 @@ export default function PublicTournamentPage() {
     if (!authToken || !tournament?.id) return;
     fetch(`${API_URL}/api/tournaments/${tournament.id}/follow`, {
       headers: { Authorization: `Bearer ${authToken}` },
-    }).then((r) => r.json()).then((d) => { if (d?.data?.following !== undefined) setFollowing(d.data.following); }).catch(() => {});
+    }).then((r) => r.json()).then((d) => { if (d?.following !== undefined) setFollowing(d.following); }).catch(() => {});
   }, [authToken, tournament?.id]);
 
   const toggleFollow = async () => {

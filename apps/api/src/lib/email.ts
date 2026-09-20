@@ -1,7 +1,20 @@
 import { Resend } from "resend";
+import { createHmac } from "crypto";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = process.env.EMAIL_FROM || "Stadia <noreply@stadia.app>";
+const UNSUB_SECRET = process.env.UNSUBSCRIBE_SECRET || "stadia-unsub-secret";
+
+export function unsubscribeUrl(userId: string, tournamentId: string): string {
+  const sig = createHmac("sha256", UNSUB_SECRET).update(`${userId}:${tournamentId}`).digest("hex");
+  const base = (process.env.WEB_BASE_URL || "https://stadia.app").split(",")[0].trim();
+  return `${base}/unsubscribe?uid=${encodeURIComponent(userId)}&tid=${encodeURIComponent(tournamentId)}&sig=${sig}`;
+}
+
+export function verifyUnsubscribeToken(userId: string, tournamentId: string, sig: string): boolean {
+  const expected = createHmac("sha256", UNSUB_SECRET).update(`${userId}:${tournamentId}`).digest("hex");
+  return sig === expected;
+}
 
 export async function sendEmail({
   to,
@@ -55,8 +68,8 @@ export function registrationConfirmedHtml({
 }
 
 export function scoreAlertHtml({
-  tournamentName, homeTeam, awayTeam, homeScore, awayScore, tournamentUrl,
-}: { tournamentName: string; homeTeam: string; awayTeam: string; homeScore: number; awayScore: number; tournamentUrl: string; }) {
+  tournamentName, homeTeam, awayTeam, homeScore, awayScore, tournamentUrl, unsubUrl,
+}: { tournamentName: string; homeTeam: string; awayTeam: string; homeScore: number; awayScore: number; tournamentUrl: string; unsubUrl: string; }) {
   return `
 <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:32px">
   <h1 style="font-size:22px;font-weight:800;color:#111827;margin-bottom:8px">Match Result — ${escHtml(tournamentName)}</h1>
@@ -70,7 +83,7 @@ export function scoreAlertHtml({
     View standings →
   </a>
   <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
-  <p style="color:#9ca3af;font-size:12px">Stadia · You're receiving this because you follow ${escHtml(tournamentName)}.</p>
+  <p style="color:#9ca3af;font-size:12px">Stadia · You're receiving this because you follow ${escHtml(tournamentName)}. · <a href="${escHtml(unsubUrl)}" style="color:#9ca3af">Unsubscribe</a></p>
 </div>`;
 }
 
