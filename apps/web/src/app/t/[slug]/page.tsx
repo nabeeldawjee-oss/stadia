@@ -44,6 +44,7 @@ interface Tournament {
   status: string;
   branding?: { primaryColor?: string; logoUrl?: string } | null;
   divisions: Division[];
+  registration?: { isOpen: boolean; entryFee: number; currency: string } | null;
 }
 interface ScheduledMatch {
   matchId: string;
@@ -235,6 +236,26 @@ export default function PublicTournamentPage() {
           </span>
         </div>
       </div>
+
+      {/* Registration banner */}
+      {tournament.registration?.isOpen && (
+        <div className="border-b border-gray-100" style={{ backgroundColor: `${primary}10` }}>
+          <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+            <p className="text-sm font-medium" style={{ color: primary }}>
+              {tournament.registration.entryFee > 0
+                ? `Registration open · ${tournament.registration.entryFee} ${tournament.registration.currency} entry fee`
+                : "Registration is open — join now"}
+            </p>
+            <Link
+              href={`/t/${slug}/register`}
+              className="shrink-0 text-sm font-semibold px-4 py-1.5 rounded-lg text-white transition hover:opacity-90"
+              style={{ backgroundColor: primary }}
+            >
+              Register →
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">

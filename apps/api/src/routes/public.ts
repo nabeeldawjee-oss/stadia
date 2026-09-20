@@ -35,13 +35,30 @@ export async function publicRoutes(app: FastifyInstance) {
           orderBy: { orderIndex: "asc" },
         },
         posts: { orderBy: { publishedAt: "desc" }, take: 20 },
+        registrationSchema: { select: { isOpen: true, entryFee: true, currency: true, deadline: true, maxTeams: true } },
+        _count: { select: { teams: true } },
       },
     });
 
     if (!tournament) return reply.code(404).send({ success: false, error: "Tournament not found" });
     if (tournament.status === "DRAFT") return reply.code(404).send({ success: false, error: "Tournament not found" });
 
-    return reply.send({ success: true, data: tournament });
+    const reg = tournament.registrationSchema;
+    const isRegistrationOpen = !!(
+      reg?.isOpen &&
+      (!reg.deadline || new Date(reg.deadline) > new Date()) &&
+      (!reg.maxTeams || tournament._count.teams < reg.maxTeams)
+    );
+
+    return reply.send({
+      success: true,
+      data: {
+        ...tournament,
+        registration: reg
+          ? { isOpen: isRegistrationOpen, entryFee: reg.entryFee, currency: reg.currency }
+          : null,
+      },
+    });
   });
 
   // Public schedule for a tournament (supports ?day=YYYY-MM-DD and ?fieldId=xxx)
