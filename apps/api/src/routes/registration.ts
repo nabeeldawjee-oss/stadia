@@ -116,6 +116,22 @@ export async function registrationRoutes(app: FastifyInstance) {
     }
   });
 
+  // Update registration status (organizer approve/reject)
+  app.patch("/api/registrations/:registrationId", { preHandler: authenticate }, async (req, reply) => {
+    const { registrationId } = req.params as { registrationId: string };
+    const { status } = z.object({ status: z.enum(["CONFIRMED", "WITHDRAWN"]) }).parse(req.body);
+
+    const reg = await prisma.registration.findUnique({
+      where: { id: registrationId },
+      include: { schema: { select: { tournamentId: true } } },
+    });
+    if (!reg) return reply.code(404).send({ success: false, error: "Not found" });
+    await assertTournamentAccess(req.userId!, reg.schema.tournamentId, "manage_registration");
+
+    const updated = await prisma.registration.update({ where: { id: registrationId }, data: { status } });
+    return reply.send({ success: true, data: updated });
+  });
+
   // Stripe webhook
   app.post("/api/webhooks/stripe", {
     config: { rawBody: true },

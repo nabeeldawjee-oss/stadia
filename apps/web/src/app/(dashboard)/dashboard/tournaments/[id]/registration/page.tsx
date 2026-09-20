@@ -3,7 +3,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { api } from "@/lib/api";
-import { ExternalLink, Copy, Check, Plus, Trash2, GripVertical } from "lucide-react";
+import { ExternalLink, Copy, Check, Plus, Trash2, GripVertical, CheckCircle, XCircle, Download } from "lucide-react";
 
 interface FormField { id?: string; fieldKey: string; label: string; type: string; required: boolean; options?: string[]; orderIndex: number; }
 interface Registration { id: string; team?: { name: string } | null; formData: any; status: string; totalAmount: number; currency: string; reservedAt: string; }
@@ -30,9 +30,11 @@ export default function RegistrationPage() {
   const [maxTeams, setMaxTeams] = useState("");
   const [fields, setFields] = useState<FormField[]>([]);
 
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+
   const { data: tournament } = useSWR(`/api/tournaments/${tournamentId}`, () => api.get(`/api/tournaments/${tournamentId}`));
   const { data: schema, mutate: mutateSchema } = useSWR<RegistrationSchema>(`/api/tournaments/${tournamentId}/registration`, () => api.get(`/api/tournaments/${tournamentId}/registration`));
-  const { data: registrations } = useSWR<Registration[]>(`/api/tournaments/${tournamentId}/registrations`, () => api.get(`/api/tournaments/${tournamentId}/registrations`));
+  const { data: registrations, mutate: mutateRegistrations } = useSWR<Registration[]>(`/api/tournaments/${tournamentId}/registrations`, () => api.get(`/api/tournaments/${tournamentId}/registrations`));
 
   useEffect(() => {
     if (schema) {
@@ -85,6 +87,40 @@ export default function RegistrationPage() {
     navigator.clipboard.writeText(`${window.location.origin}/t/${tournament.slug}/register`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const updateStatus = async (regId: string, status: "CONFIRMED" | "WITHDRAWN") => {
+    setUpdatingStatus(regId);
+    try {
+      await api.patch(`/api/registrations/${regId}`, { status });
+      await mutateRegistrations();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
+
+  const exportCsv = () => {
+    if (!registrations?.length) return;
+    const rows = registrations.map((reg) => {
+      const teamName = reg.team?.name ?? reg.formData?.team_name ?? reg.formData?.teamName ?? "";
+      const email = reg.formData?.contact_email ?? reg.formData?.email ?? "";
+      const extra = Object.entries(reg.formData ?? {})
+        .filter(([k]) => !["team_name", "teamName", "contact_email", "email"].includes(k))
+        .map(([k, v]) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(",");
+      return `"${teamName}","${email}","${reg.status}","${new Date(reg.reservedAt).toLocaleDateString()}"${extra ? "," + extra : ""}`;
+    });
+    const header = `"Team","Email","Status","Date"`;
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "registrations.csv";
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const inputCls = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
@@ -209,7 +245,14 @@ export default function RegistrationPage() {
 
       {/* Registrations list */}
       <div className="bg-white border border-gray-200 rounded-2xl p-6">
-        <h2 className="font-semibold text-gray-900 mb-4">Submissions ({registrations?.length ?? 0})</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-gray-900">Submissions ({registrations?.length ?? 0})</h2>
+          {(registrations?.length ?? 0) > 0 && (
+            <button onClick={exportCsv} className="flex items-center gap-1.5 text-xs text-gray-500 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition">
+              <Download className="w-3.5 h-3.5" /> Export CSV
+            </button>
+          )}
+        </div>
         {!registrations || registrations.length === 0 ? (
           <p className="text-sm text-gray-400">No registrations yet.</p>
         ) : (
@@ -217,19 +260,42 @@ export default function RegistrationPage() {
             {registrations.map((reg) => {
               const teamName = reg.team?.name ?? reg.formData?.team_name ?? reg.formData?.teamName ?? "Unknown";
               const contactEmail = reg.formData?.contact_email ?? reg.formData?.email ?? "—";
+              const canApprove = reg.status === "RESERVED" || reg.status === "PENDING_PAYMENT";
+              const canWithdraw = reg.status === "RESERVED" || reg.status === "CONFIRMED" || reg.status === "PENDING_PAYMENT";
+              const isUpdating = updatingStatus === reg.id;
               return (
-                <div key={reg.id} className="flex items-center justify-between border border-gray-100 rounded-lg px-4 py-3">
-                  <div>
+                <div key={reg.id} className="flex items-center justify-between border border-gray-100 rounded-lg px-4 py-3 gap-3">
+                  <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900">{teamName}</p>
                     <p className="text-xs text-gray-500">{contactEmail}</p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 shrink-0">
                     {reg.totalAmount > 0 && (
-                      <span className="text-xs text-gray-500">{reg.currency} {(reg.totalAmount / 100).toFixed(2)}</span>
+                      <span className="text-xs text-gray-400">{reg.currency} {(reg.totalAmount / 100).toFixed(2)}</span>
                     )}
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[reg.status] ?? "bg-gray-100 text-gray-600"}`}>
                       {reg.status.replace("_", " ")}
                     </span>
+                    {canApprove && (
+                      <button
+                        onClick={() => updateStatus(reg.id, "CONFIRMED")}
+                        disabled={isUpdating}
+                        title="Approve"
+                        className="text-gray-300 hover:text-green-500 disabled:opacity-40 transition"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                      </button>
+                    )}
+                    {canWithdraw && (
+                      <button
+                        onClick={() => updateStatus(reg.id, "WITHDRAWN")}
+                        disabled={isUpdating}
+                        title="Reject"
+                        className="text-gray-300 hover:text-red-500 disabled:opacity-40 transition"
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
