@@ -144,6 +144,28 @@ export default function PresentationPage() {
           <a href={`/embed/t/${slug}/standings`} target="_blank" className="inline-flex items-center gap-1.5 text-xs text-brand-600 hover:underline mt-3">
             <ExternalLink className="w-3.5 h-3.5" /> Preview embed
           </a>
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <p className="text-xs font-medium text-gray-600 mb-2">Bracket embed</p>
+            {(() => {
+              const origin = typeof window !== "undefined" ? window.location.origin : "";
+              const src = `${origin}/embed/t/${slug}/bracket`;
+              const code = `<iframe src="${src}" width="100%" height="360" frameborder="0" style="border-radius:12px;border:1px solid #e5e7eb;overflow-x:auto;"></iframe>`;
+              return (
+                <div className="relative">
+                  <pre className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs font-mono text-gray-700 whitespace-pre-wrap break-all">{code}</pre>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(code); setCopiedEmbed(true); setTimeout(() => setCopiedEmbed(false), 2000); }}
+                    className="absolute top-2 right-2 p-1.5 bg-white border border-gray-200 rounded-lg text-gray-400 hover:text-brand-600 transition"
+                  >
+                    {copiedEmbed ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              );
+            })()}
+            <a href={`/embed/t/${slug}/bracket`} target="_blank" className="inline-flex items-center gap-1.5 text-xs text-brand-600 hover:underline mt-2">
+              <ExternalLink className="w-3.5 h-3.5" /> Preview bracket embed
+            </a>
+          </div>
         </div>
       )}
 
