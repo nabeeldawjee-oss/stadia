@@ -216,6 +216,54 @@ export async function divisionRoutes(app: FastifyInstance) {
     }
   });
 
+  // Undo a completed phase transition — revert current phase to ACTIVE, previous to PENDING
+  app.post("/api/phases/:id/undo", { preHandler: authenticate }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const phase = await prisma.phase.findUnique({ where: { id }, include: { division: true } });
+    if (!phase) return reply.code(404).send({ success: false, error: "Not found" });
+    await assertTournamentAccess(req.userId!, phase.division.tournamentId, "manage_general");
+
+    // The phase being undone must be COMPLETED (it was the group stage that was just advanced)
+    if (phase.status !== "COMPLETED") {
+      return reply.code(400).send({ success: false, error: "Only a completed phase can be undone" });
+    }
+    // Find the next phase (currently ACTIVE after the transition)
+    const nextPhase = await prisma.phase.findFirst({
+      where: { divisionId: phase.divisionId, orderIndex: { gt: phase.orderIndex } },
+      orderBy: { orderIndex: "asc" },
+    });
+    await prisma.$transaction(async (tx) => {
+      // Revert this phase back to ACTIVE
+      await tx.phase.update({ where: { id }, data: { status: "ACTIVE" } });
+      // Revert next phase back to PENDING and clear any seeded bracket slots/matches
+      if (nextPhase) {
+        await tx.phase.update({ where: { id: nextPhase.id }, data: { status: "PENDING" } });
+        // Clear team assignments from bracket slots that were seeded by advancement rules
+        const brackets = await tx.bracket.findMany({ where: { phaseId: nextPhase.id }, select: { id: true } });
+        for (const bracket of brackets) {
+          const slots = await tx.bracketSlot.findMany({ where: { bracketId: bracket.id, roundNumber: 1 } });
+          for (const slot of slots) {
+            // Only clear slots that have an advancement rule pointing to them
+            const hasRule = await tx.advancementRule.findFirst({ where: { toBracketSlotId: slot.id } });
+            if (hasRule && slot.teamId) {
+              await tx.bracketSlot.update({ where: { id: slot.id }, data: { teamId: null } });
+              const match = await tx.match.findFirst({
+                where: slot.side === "HOME" ? { homeSlotId: slot.id } : { awaySlotId: slot.id },
+              });
+              if (match) {
+                await tx.match.update({
+                  where: { id: match.id },
+                  data: slot.side === "HOME" ? { homeTeamId: null } : { awayTeamId: null },
+                });
+              }
+            }
+          }
+        }
+      }
+    });
+    return reply.send({ success: true, data: null });
+  });
+
   // Create group
   app.post("/api/phases/:phaseId/groups", { preHandler: authenticate }, async (req, reply) => {
     const { phaseId } = req.params as { phaseId: string };

@@ -5,10 +5,10 @@ import { api } from "@/lib/api";
 import { X, Trophy, ArrowRight, CheckCircle, AlertCircle } from "lucide-react";
 
 interface Team { id: string; name: string; }
-interface Standing { position: number; team: Team; played: number; won: number; drawn: number; lost: number; goalsFor: number; goalsAgainst: number; points: number; }
+interface Standing { position: number; team: Team; played: number; wins: number; draws: number; losses: number; goalsFor: number; goalsAgainst: number; points: number; }
 interface Group { id: string; name: string; standings: Standing[]; }
-interface BracketSlot { label: string; }
-interface Seeding { groupId: string; groupName: string; position: number; team: Team | null; toBracketSlot: BracketSlot | null; }
+interface BracketSlot { roundNumber: number; position: number; }
+interface Seeding { groupId: string; groupName: string; position: number; team: Team | null; toPhaseName: string; toBracketSlot: BracketSlot | null; }
 interface AdvancePreview {
   incompleteMatches: number;
   nextPhase: { id: string; name: string } | null;
@@ -94,9 +94,9 @@ export default function PhaseTransitionModal({ phaseId, onClose, onStarted }: Pr
                             <tr key={row.position} className="border-b border-gray-100 last:border-0">
                               <td className="px-3 py-1.5 text-gray-400">{row.position}</td>
                               <td className="px-3 py-1.5 font-medium text-gray-900">{row.team.name}</td>
-                              <td className="text-center px-2 py-1.5 text-gray-600">{row.won}</td>
-                              <td className="text-center px-2 py-1.5 text-gray-600">{row.drawn}</td>
-                              <td className="text-center px-2 py-1.5 text-gray-600">{row.lost}</td>
+                              <td className="text-center px-2 py-1.5 text-gray-600">{row.wins}</td>
+                              <td className="text-center px-2 py-1.5 text-gray-600">{row.draws}</td>
+                              <td className="text-center px-2 py-1.5 text-gray-600">{row.losses}</td>
                               <td className="text-center px-2 py-1.5 font-bold text-gray-900">{row.points}</td>
                             </tr>
                           ))}
@@ -132,7 +132,8 @@ export default function PhaseTransitionModal({ phaseId, onClose, onStarted }: Pr
                         {preview.seedings.map((s, i) => (
                           <div key={i} className="flex items-center justify-between px-3 py-2.5">
                             <span className="text-xs text-gray-500 truncate max-w-[110px]">
-                              {s.toBracketSlot?.label ?? `Slot ${i + 1}`}
+                              {s.toBracketSlot ? `R${s.toBracketSlot.roundNumber} Pos ${s.toBracketSlot.position}` : `Slot ${i + 1}`}
+                              {" · "}{s.toPhaseName}
                             </span>
                             <div className="flex items-center gap-2">
                               <ArrowRight className="w-3 h-3 text-gray-300" />

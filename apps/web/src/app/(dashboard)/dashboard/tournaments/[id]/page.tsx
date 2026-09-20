@@ -2,7 +2,7 @@
 import { useParams } from "next/navigation";
 import useSWR, { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
-import { Users, GitBranch, Calendar, Trophy, Clock, MapPin, Pencil, CheckCircle, PlayCircle, BarChart2, ChevronRight, Globe, X } from "lucide-react";
+import { Users, GitBranch, Calendar, Trophy, Clock, MapPin, Pencil, CheckCircle, PlayCircle, BarChart2, ChevronRight, Globe, X, Undo2 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import ScoreEntryModal from "@/components/ScoreEntryModal";
 import PhaseTransitionModal from "@/components/PhaseTransitionModal";
@@ -163,6 +163,21 @@ export default function TournamentOverviewPage() {
     globalMutate((key: unknown) => typeof key === "string" && key.includes(id));
   };
 
+  const [undoing, setUndoing] = useState<string | null>(null);
+  const handleUndo = async (phaseId: string) => {
+    if (!confirm("Undo this phase transition? The next phase will be reset to Pending and bracket seeds cleared.")) return;
+    setUndoing(phaseId);
+    try {
+      await api.post(`/api/phases/${phaseId}/undo`, {});
+      await mutateProgress();
+      globalMutate((key: unknown) => typeof key === "string" && key.includes(id));
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setUndoing(null);
+    }
+  };
+
   if (!t) return <div className="text-gray-400 py-12 text-center">Loading...</div>;
 
   const pending = todayMatches?.filter((s) => s.match.status === "SCHEDULED") ?? [];
@@ -289,9 +304,22 @@ export default function TournamentOverviewPage() {
                         {isKnockoutPending ? "Pending start" : isPhaseComplete ? "Complete" : phase.status === "ACTIVE" ? "In progress" : phase.status}
                       </span>
                     </div>
-                    <span className="text-xs font-mono text-gray-500">
-                      {phase.completedMatches}/{phase.totalMatches}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono text-gray-500">
+                        {phase.completedMatches}/{phase.totalMatches}
+                      </span>
+                      {phase.status === "COMPLETED" && phase.type === "GROUP_STAGE" && phase.nextPhaseId && (
+                        <button
+                          onClick={() => handleUndo(phase.id)}
+                          disabled={undoing === phase.id}
+                          title="Undo phase transition"
+                          className="flex items-center gap-1 text-xs text-gray-400 hover:text-amber-600 hover:bg-amber-50 px-2 py-0.5 rounded-lg transition disabled:opacity-40"
+                        >
+                          <Undo2 className="w-3 h-3" />
+                          Undo
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                     <div
