@@ -4,7 +4,7 @@ import useSWR from "swr";
 import { api } from "@/lib/api";
 import { useState } from "react";
 import ScoreEntryModal from "@/components/ScoreEntryModal";
-import { Zap, CheckCircle, ChevronDown, ChevronUp, BarChart2 } from "lucide-react";
+import { Zap, CheckCircle, ChevronDown, ChevronUp, BarChart2, History } from "lucide-react";
 
 interface Team { id: string; name: string; }
 interface Match {
@@ -233,59 +233,118 @@ export default function MatchesPage() {
   );
 }
 
+interface ScoreLog {
+  id: string;
+  previousHomeScore: number;
+  previousAwayScore: number;
+  newHomeScore: number;
+  newAwayScore: number;
+  reason: string | null;
+  createdAt: string;
+}
+
 function MatchRow({ match, tournamentId, onScore }: { match: Match; tournamentId: string; onScore: () => void }) {
   const isDone = match.status === "COMPLETED";
   const isCancelled = match.status === "CANCELLED";
   const canScore = !!(match.homeTeam && match.awayTeam) && !isCancelled;
   const homeWins = isDone && match.homeScore! > match.awayScore!;
   const awayWins = isDone && match.awayScore! > match.homeScore!;
+  const [logOpen, setLogOpen] = useState(false);
+
+  const { data: logEntries } = useSWR<ScoreLog[]>(
+    logOpen ? `/api/matches/${match.id}/score-log` : null,
+    () => api.get(`/api/matches/${match.id}/score-log`)
+  );
 
   return (
-    <div className={`px-5 py-3 flex items-center gap-4 ${isCancelled ? "opacity-50" : isDone ? "opacity-80" : ""}`}>
-      {/* Teams + score */}
-      <div className="flex-1 flex items-center gap-3 min-w-0">
-        <span className={`flex-1 text-right text-sm truncate ${isCancelled ? "line-through text-gray-400" : homeWins ? "font-bold text-gray-900" : isDone ? "text-gray-400" : "text-gray-700"}`}>
-          {match.homeTeam?.name ?? <span className="italic text-gray-300">TBD</span>}
-        </span>
-        <div className="shrink-0 min-w-[56px] text-center">
-          {isDone && !isCancelled ? (
-            <span className="font-mono font-bold text-gray-900 text-sm">
-              {match.homeScore} – {match.awayScore}
+    <div className={isCancelled ? "opacity-50" : isDone ? "opacity-80" : ""}>
+      <div className="px-5 py-3 flex items-center gap-4">
+        {/* Teams + score */}
+        <div className="flex-1 flex items-center gap-3 min-w-0">
+          <span className={`flex-1 text-right text-sm truncate ${isCancelled ? "line-through text-gray-400" : homeWins ? "font-bold text-gray-900" : isDone ? "text-gray-400" : "text-gray-700"}`}>
+            {match.homeTeam?.name ?? <span className="italic text-gray-300">TBD</span>}
+          </span>
+          <div className="shrink-0 min-w-[56px] text-center">
+            {isDone && !isCancelled ? (
+              <span className="font-mono font-bold text-gray-900 text-sm">
+                {match.homeScore} – {match.awayScore}
+              </span>
+            ) : (
+              <span className="text-gray-300 text-xs font-medium">vs</span>
+            )}
+          </div>
+          <span className={`flex-1 text-left text-sm truncate ${isCancelled ? "line-through text-gray-400" : awayWins ? "font-bold text-gray-900" : isDone ? "text-gray-400" : "text-gray-700"}`}>
+            {match.awayTeam?.name ?? <span className="italic text-gray-300">TBD</span>}
+          </span>
+        </div>
+
+        {/* Status + action */}
+        <div className="shrink-0 flex items-center gap-2">
+          {isCancelled ? (
+            <span className="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded-full font-medium">CANCELLED</span>
+          ) : isDone ? (
+            <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+              <CheckCircle className="w-3 h-3" /> FT
             </span>
           ) : (
-            <span className="text-gray-300 text-xs font-medium">vs</span>
+            <span className="text-xs text-gray-300 font-medium">—</span>
+          )}
+          {isDone && (
+            <button
+              onClick={() => setLogOpen((v) => !v)}
+              title="Score override history"
+              className={`p-1.5 rounded-lg transition ${logOpen ? "bg-amber-100 text-amber-600" : "text-gray-300 hover:text-gray-500 hover:bg-gray-100"}`}
+            >
+              <History className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {canScore && (
+            <button
+              onClick={onScore}
+              className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg transition ${
+                isDone
+                  ? "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                  : "bg-brand-600 text-white hover:bg-brand-700"
+              }`}
+            >
+              <Zap className="w-3 h-3" />
+              {isDone ? "Edit" : "Score"}
+            </button>
           )}
         </div>
-        <span className={`flex-1 text-left text-sm truncate ${isCancelled ? "line-through text-gray-400" : awayWins ? "font-bold text-gray-900" : isDone ? "text-gray-400" : "text-gray-700"}`}>
-          {match.awayTeam?.name ?? <span className="italic text-gray-300">TBD</span>}
-        </span>
       </div>
 
-      {/* Status + action */}
-      <div className="shrink-0 flex items-center gap-2">
-        {isCancelled ? (
-          <span className="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded-full font-medium">CANCELLED</span>
-        ) : isDone ? (
-          <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-            <CheckCircle className="w-3 h-3" /> FT
-          </span>
-        ) : (
-          <span className="text-xs text-gray-300 font-medium">—</span>
-        )}
-        {canScore && (
-          <button
-            onClick={onScore}
-            className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg transition ${
-              isDone
-                ? "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                : "bg-brand-600 text-white hover:bg-brand-700"
-            }`}
-          >
-            <Zap className="w-3 h-3" />
-            {isDone ? "Edit" : "Score"}
-          </button>
-        )}
-      </div>
+      {/* Score override log */}
+      {logOpen && (
+        <div className="px-5 pb-3 border-t border-gray-50 bg-amber-50/40">
+          <p className="text-xs font-semibold text-amber-700 mt-2 mb-1.5">Score override history</p>
+          {!logEntries ? (
+            <p className="text-xs text-gray-400">Loading…</p>
+          ) : logEntries.length === 0 ? (
+            <p className="text-xs text-gray-400">No overrides recorded.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {logEntries.map((entry) => (
+                <div key={entry.id} className="text-xs text-gray-600 flex items-start gap-3">
+                  <span className="text-gray-400 shrink-0 tabular-nums">
+                    {new Date(entry.createdAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                  <span className="font-mono text-gray-500 line-through shrink-0">
+                    {entry.previousHomeScore}–{entry.previousAwayScore}
+                  </span>
+                  <span className="text-gray-300 shrink-0">→</span>
+                  <span className="font-mono font-semibold text-gray-800 shrink-0">
+                    {entry.newHomeScore}–{entry.newAwayScore}
+                  </span>
+                  {entry.reason && (
+                    <span className="text-gray-400 italic truncate">{entry.reason}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
