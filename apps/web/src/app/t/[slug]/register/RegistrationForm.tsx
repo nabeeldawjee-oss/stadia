@@ -6,7 +6,7 @@ import { Elements, CardElement, useStripe, useElements } from "@stripe/react-str
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
-interface FieldDef { id: string; label: string; type: string; required: boolean; options?: string[]; }
+interface FieldDef { id: string; fieldKey: string; label: string; type: string; required: boolean; options?: string[]; }
 interface AddOn { id: string; label: string; price: number; }
 interface RegSchema { fields: FieldDef[]; addOns: AddOn[]; entryFee: number; currency: string; maxTeams: number | null; }
 interface Props { slug: string; schema: RegSchema; }
@@ -35,7 +35,7 @@ function RegistrationFormInner({ slug, schema }: { slug: string; schema: RegSche
     setSubmitting(true);
     setError(null);
     try {
-      const body: any = { fields: values, addOns: selectedAddOns };
+      const body: any = { ...values, addOnIds: selectedAddOns };
 
       if (schema.entryFee > 0) {
         if (!stripe || !elements) throw new Error("Stripe not ready");
@@ -45,7 +45,7 @@ function RegistrationFormInner({ slug, schema }: { slug: string; schema: RegSche
         // Get PaymentIntent client secret from API
         const { clientSecret } = await apiFetch(`/api/public/t/${slug}/register`, {
           method: "POST",
-          body: JSON.stringify({ ...body, paymentStep: "create_intent" }),
+          body: JSON.stringify(body),
         });
 
         const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
@@ -90,8 +90,8 @@ function RegistrationFormInner({ slug, schema }: { slug: string; schema: RegSche
           {field.type === "select" && field.options ? (
             <select
               required={field.required}
-              value={values[field.id] ?? ""}
-              onChange={(e) => setValues((v) => ({ ...v, [field.id]: e.target.value }))}
+              value={values[field.fieldKey] ?? ""}
+              onChange={(e) => setValues((v) => ({ ...v, [field.fieldKey]: e.target.value }))}
               className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             >
               <option value="">Select...</option>
@@ -100,8 +100,8 @@ function RegistrationFormInner({ slug, schema }: { slug: string; schema: RegSche
           ) : field.type === "textarea" ? (
             <textarea
               required={field.required}
-              value={values[field.id] ?? ""}
-              onChange={(e) => setValues((v) => ({ ...v, [field.id]: e.target.value }))}
+              value={values[field.fieldKey] ?? ""}
+              onChange={(e) => setValues((v) => ({ ...v, [field.fieldKey]: e.target.value }))}
               rows={3}
               className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
@@ -109,8 +109,8 @@ function RegistrationFormInner({ slug, schema }: { slug: string; schema: RegSche
             <input
               type={field.type === "email" ? "email" : field.type === "phone" ? "tel" : "text"}
               required={field.required}
-              value={values[field.id] ?? ""}
-              onChange={(e) => setValues((v) => ({ ...v, [field.id]: e.target.value }))}
+              value={values[field.fieldKey] ?? ""}
+              onChange={(e) => setValues((v) => ({ ...v, [field.fieldKey]: e.target.value }))}
               className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           )}
