@@ -7,7 +7,7 @@ import { Elements, CardElement, useStripe, useElements } from "@stripe/react-str
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 interface FieldDef { id: string; fieldKey: string; label: string; type: string; required: boolean; options?: string[]; }
-interface AddOn { id: string; label: string; price: number; }
+interface AddOn { id: string; name: string; price: number; }
 interface RegSchema { fields: FieldDef[]; addOns: AddOn[]; entryFee: number; currency: string; maxTeams: number | null; }
 interface Props { slug: string; schema: RegSchema; }
 
@@ -87,7 +87,7 @@ function RegistrationFormInner({ slug, schema }: { slug: string; schema: RegSche
             {field.label}
             {field.required && <span className="text-red-500 ml-1">*</span>}
           </label>
-          {field.type === "select" && field.options ? (
+          {(field.type === "SELECT" || field.type === "MULTI_SELECT") && field.options ? (
             <select
               required={field.required}
               value={values[field.fieldKey] ?? ""}
@@ -97,17 +97,19 @@ function RegistrationFormInner({ slug, schema }: { slug: string; schema: RegSche
               <option value="">Select...</option>
               {field.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
             </select>
-          ) : field.type === "textarea" ? (
-            <textarea
-              required={field.required}
-              value={values[field.fieldKey] ?? ""}
-              onChange={(e) => setValues((v) => ({ ...v, [field.fieldKey]: e.target.value }))}
-              rows={3}
-              className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-            />
+          ) : field.type === "CHECKBOX" ? (
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={values[field.fieldKey] === "true"}
+                onChange={(e) => setValues((v) => ({ ...v, [field.fieldKey]: String(e.target.checked) }))}
+                className="w-4 h-4 text-brand-600 rounded border-gray-300"
+              />
+              <span className="text-sm text-gray-600">{field.label}</span>
+            </label>
           ) : (
             <input
-              type={field.type === "email" ? "email" : field.type === "phone" ? "tel" : "text"}
+              type={field.type === "EMAIL" ? "email" : field.type === "NUMBER" ? "number" : "text"}
               required={field.required}
               value={values[field.fieldKey] ?? ""}
               onChange={(e) => setValues((v) => ({ ...v, [field.fieldKey]: e.target.value }))}
@@ -129,7 +131,7 @@ function RegistrationFormInner({ slug, schema }: { slug: string; schema: RegSche
                   onChange={() => toggleAddOn(addon.id)}
                   className="w-4 h-4 text-brand-600 rounded"
                 />
-                <span className="text-sm text-gray-700 flex-1">{addon.label}</span>
+                <span className="text-sm text-gray-700 flex-1">{addon.name}</span>
                 <span className="text-sm font-medium text-gray-900">+{schema.currency}{addon.price}</span>
               </label>
             ))}
