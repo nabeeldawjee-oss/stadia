@@ -3,10 +3,10 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { api } from "@/lib/api";
-import { ExternalLink, Copy, Check, Plus, Trash2, GripVertical, CheckCircle, XCircle, Download } from "lucide-react";
+import { ExternalLink, Copy, Check, Plus, Trash2, GripVertical, CheckCircle, XCircle, Download, UserCheck } from "lucide-react";
 
 interface FormField { id?: string; fieldKey: string; label: string; type: string; required: boolean; options?: string[]; orderIndex: number; }
-interface Registration { id: string; team?: { name: string } | null; formData: any; status: string; totalAmount: number; currency: string; reservedAt: string; }
+interface Registration { id: string; team?: { id: string; name: string } | null; formData: any; status: string; totalAmount: number; currency: string; reservedAt: string; }
 interface RegistrationSchema { id: string; isOpen: boolean; entryFee: number; currency: string; deadline: string | null; maxTeams: number | null; fields: FormField[]; }
 
 const FIELD_TYPES = ["TEXT", "NUMBER", "EMAIL", "SELECT", "CHECKBOX"] as const;
@@ -98,6 +98,20 @@ export default function RegistrationPage() {
       alert(err.message);
     } finally {
       setUpdatingStatus(null);
+    }
+  };
+
+  const [importingTeam, setImportingTeam] = useState<string | null>(null);
+
+  const importTeam = async (regId: string) => {
+    setImportingTeam(regId);
+    try {
+      await api.post(`/api/registrations/${regId}/import-team`, {});
+      await mutateRegistrations();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setImportingTeam(null);
     }
   };
 
@@ -262,11 +276,18 @@ export default function RegistrationPage() {
               const contactEmail = reg.formData?.contact_email ?? reg.formData?.email ?? "—";
               const canApprove = reg.status === "RESERVED" || reg.status === "PENDING_PAYMENT";
               const canWithdraw = reg.status === "RESERVED" || reg.status === "CONFIRMED" || reg.status === "PENDING_PAYMENT";
+              const canImport = reg.status === "CONFIRMED" && !reg.team;
               const isUpdating = updatingStatus === reg.id;
+              const isImporting = importingTeam === reg.id;
               return (
                 <div key={reg.id} className="flex items-center justify-between border border-gray-100 rounded-lg px-4 py-3 gap-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900">{teamName}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-gray-900">{teamName}</p>
+                      {reg.team && (
+                        <span className="text-xs bg-brand-50 text-brand-600 px-1.5 py-0.5 rounded font-medium">Team ✓</span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-500">{contactEmail}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -276,6 +297,17 @@ export default function RegistrationPage() {
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[reg.status] ?? "bg-gray-100 text-gray-600"}`}>
                       {reg.status.replace("_", " ")}
                     </span>
+                    {canImport && (
+                      <button
+                        onClick={() => importTeam(reg.id)}
+                        disabled={isImporting}
+                        title="Import as team"
+                        className="flex items-center gap-1 text-xs text-brand-600 border border-brand-200 bg-brand-50 hover:bg-brand-100 px-2 py-0.5 rounded-lg disabled:opacity-40 transition"
+                      >
+                        <UserCheck className="w-3 h-3" />
+                        {isImporting ? "…" : "Add team"}
+                      </button>
+                    )}
                     {canApprove && (
                       <button
                         onClick={() => updateStatus(reg.id, "CONFIRMED")}

@@ -162,6 +162,38 @@ export async function registrationRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: updated });
   });
 
+  // Convert a confirmed registration into a tournament team
+  app.post("/api/registrations/:registrationId/import-team", { preHandler: authenticate }, async (req, reply) => {
+    const { registrationId } = req.params as { registrationId: string };
+
+    const reg = await prisma.registration.findUnique({
+      where: { id: registrationId },
+      include: { schema: { select: { tournamentId: true } } },
+    });
+    if (!reg) return reply.code(404).send({ success: false, error: "Not found" });
+    await assertTournamentAccess(req.userId!, reg.schema.tournamentId, "manage_registration");
+
+    if (reg.status !== "CONFIRMED") {
+      return reply.code(400).send({ success: false, error: "Only confirmed registrations can be imported as teams" });
+    }
+    if (reg.teamId) {
+      return reply.code(400).send({ success: false, error: "This registration already has a team linked" });
+    }
+
+    const fd = reg.formData as Record<string, any>;
+    const teamName = fd?.teamName ?? fd?.team_name ?? fd?.name ?? "Unnamed Team";
+
+    const team = await prisma.team.create({
+      data: {
+        name: teamName,
+        tournamentId: reg.schema.tournamentId,
+        registrations: { connect: { id: reg.id } },
+      },
+    });
+
+    return reply.send({ success: true, data: { teamId: team.id, teamName: team.name } });
+  });
+
   // Stripe webhook
   app.post("/api/webhooks/stripe", {
     config: { rawBody: true },
