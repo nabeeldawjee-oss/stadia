@@ -4,6 +4,7 @@ import { prisma } from "@stadia/db";
 import { authenticate } from "../middleware/authenticate";
 import { assertTournamentAccess } from "../engines/auth/permissions";
 import { generateScoreToken } from "../engines/referees/generate-token";
+import { sendEmail, refereePortalHtml } from "../lib/email";
 
 const refSchema = z.object({
   name: z.string().min(1).max(200),
@@ -61,6 +62,27 @@ export async function refereeRoutes(app: FastifyInstance) {
     await prisma.scoreToken.deleteMany({ where: { refereeId: id } });
     const token = await generateScoreToken("REFEREE", id, ref.tournamentId);
     return reply.send({ success: true, data: { token: token.token } });
+  });
+
+  // Email referee their portal link
+  app.post("/api/referees/:id/send-link", { preHandler: authenticate }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const ref = await prisma.referee.findUnique({
+      where: { id },
+      include: { scoreToken: true, tournament: { select: { name: true } } },
+    });
+    if (!ref) return reply.code(404).send({ success: false, error: "Not found" });
+    await assertTournamentAccess(req.userId!, ref.tournamentId, "manage_referees");
+    if (!ref.email) return reply.code(400).send({ success: false, error: "Referee has no email address" });
+    if (!ref.scoreToken) return reply.code(400).send({ success: false, error: "Referee has no portal token" });
+    const webBase = (process.env.WEB_BASE_URL || "http://localhost:3001").split(",")[0].trim();
+    const portalUrl = `${webBase}/ref?token=${encodeURIComponent(ref.scoreToken.token)}`;
+    await sendEmail({
+      to: ref.email,
+      subject: `Referee portal — ${ref.tournament.name}`,
+      html: refereePortalHtml({ tournamentName: ref.tournament.name, refName: ref.name, portalUrl }),
+    });
+    return reply.send({ success: true, data: null });
   });
 
   // Add referee availability

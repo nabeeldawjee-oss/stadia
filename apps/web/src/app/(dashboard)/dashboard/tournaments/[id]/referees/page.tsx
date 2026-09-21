@@ -3,7 +3,7 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import useSWR from "swr";
 import { api } from "@/lib/api";
-import { Plus, Copy, RefreshCw, Trash2, Check, ChevronDown, ChevronRight, UserCheck, X } from "lucide-react";
+import { Plus, Copy, RefreshCw, Trash2, Check, ChevronDown, ChevronRight, UserCheck, X, Mail } from "lucide-react";
 
 interface Assignment {
   matchId: string;
@@ -38,6 +38,8 @@ export default function RefereesPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [assigning, setAssigning] = useState<string | null>(null);
   const [selectedMatch, setSelectedMatch] = useState("");
+  const [sendingLink, setSendingLink] = useState<string | null>(null);
+  const [sentLink, setSentLink] = useState<string | null>(null);
 
   const { data: refs, mutate } = useSWR<Referee[]>(
     `/api/tournaments/${tournamentId}/referees`,
@@ -98,6 +100,19 @@ export default function RefereesPage() {
     navigator.clipboard.writeText(`${base}/ref?token=${token}`);
     setCopied(token);
     setTimeout(() => setCopied(null), 2000);
+  };
+
+  const sendLink = async (refId: string) => {
+    setSendingLink(refId);
+    try {
+      await api.post(`/api/referees/${refId}/send-link`, {});
+      setSentLink(refId);
+      setTimeout(() => setSentLink(null), 3000);
+    } catch (err: any) {
+      alert(err.message || "Failed to send email");
+    } finally {
+      setSendingLink(null);
+    }
   };
 
   const assignRef = async (refId: string) => {
@@ -181,6 +196,16 @@ export default function RefereesPage() {
                           <button onClick={() => copyLink(token)} className="text-gray-400 hover:text-brand-600 transition" title="Copy link">
                             {copied === token ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
                           </button>
+                          {ref.email && (
+                            <button
+                              onClick={() => sendLink(ref.id)}
+                              disabled={sendingLink === ref.id}
+                              title="Email portal link to referee"
+                              className="text-gray-400 hover:text-brand-600 transition disabled:opacity-40"
+                            >
+                              {sentLink === ref.id ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Mail className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
                           <button onClick={() => regen(ref.id)} className="text-gray-400 hover:text-brand-600 transition" title="Regenerate token">
                             <RefreshCw className="w-3.5 h-3.5" />
                           </button>

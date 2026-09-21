@@ -87,6 +87,24 @@ export function scoreAlertHtml({
 </div>`;
 }
 
+export function refereePortalHtml({
+  tournamentName, refName, portalUrl,
+}: { tournamentName: string; refName: string; portalUrl: string; }) {
+  return `
+<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:32px">
+  <h1 style="font-size:22px;font-weight:800;color:#111827;margin-bottom:8px">Your referee portal</h1>
+  <p style="color:#374151">Hi ${escHtml(refName)},</p>
+  <p style="color:#374151">You've been added as a referee for <strong>${escHtml(tournamentName)}</strong>. Use the button below to access your match assignments and enter scores.</p>
+  <a href="${escHtml(portalUrl)}"
+     style="display:inline-block;background:#16a34a;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;margin:16px 0">
+    Open referee portal →
+  </a>
+  <p style="color:#6b7280;font-size:13px">This link is personal to you. Keep it private — anyone with this link can enter scores on your behalf.</p>
+  <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+  <p style="color:#9ca3af;font-size:12px">Stadia · Tournament Management Platform</p>
+</div>`;
+}
+
 function escHtml(s: string | number) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
