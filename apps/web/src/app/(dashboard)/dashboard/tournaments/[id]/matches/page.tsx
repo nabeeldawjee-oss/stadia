@@ -57,8 +57,9 @@ export default function MatchesPage() {
   if (!divisions) return <div className="text-gray-400 text-sm text-center py-12">Loading…</div>;
 
   const allPhases = divisions.flatMap((d) => d.phases);
-  const totalMatches = allPhases.flatMap((p) => [...p.groups.flatMap((g) => g.matches), ...p.brackets.flatMap((b) => b.matches)]).length;
-  const completedMatches = allPhases.flatMap((p) => [...p.groups.flatMap((g) => g.matches), ...p.brackets.flatMap((b) => b.matches)]).filter((m) => m.status === "COMPLETED").length;
+  const allMatchFlat = allPhases.flatMap((p) => [...p.groups.flatMap((g) => g.matches), ...p.brackets.flatMap((b) => b.matches)]);
+  const totalMatches = allMatchFlat.filter((m) => m.status !== "CANCELLED").length;
+  const completedMatches = allMatchFlat.filter((m) => m.status === "COMPLETED").length;
 
   return (
     <div className="space-y-4">
@@ -234,19 +235,20 @@ export default function MatchesPage() {
 
 function MatchRow({ match, tournamentId, onScore }: { match: Match; tournamentId: string; onScore: () => void }) {
   const isDone = match.status === "COMPLETED";
-  const canScore = !!(match.homeTeam && match.awayTeam);
+  const isCancelled = match.status === "CANCELLED";
+  const canScore = !!(match.homeTeam && match.awayTeam) && !isCancelled;
   const homeWins = isDone && match.homeScore! > match.awayScore!;
   const awayWins = isDone && match.awayScore! > match.homeScore!;
 
   return (
-    <div className={`px-5 py-3 flex items-center gap-4 ${isDone ? "opacity-80" : ""}`}>
+    <div className={`px-5 py-3 flex items-center gap-4 ${isCancelled ? "opacity-50" : isDone ? "opacity-80" : ""}`}>
       {/* Teams + score */}
       <div className="flex-1 flex items-center gap-3 min-w-0">
-        <span className={`flex-1 text-right text-sm truncate ${homeWins ? "font-bold text-gray-900" : isDone ? "text-gray-400" : "text-gray-700"}`}>
+        <span className={`flex-1 text-right text-sm truncate ${isCancelled ? "line-through text-gray-400" : homeWins ? "font-bold text-gray-900" : isDone ? "text-gray-400" : "text-gray-700"}`}>
           {match.homeTeam?.name ?? <span className="italic text-gray-300">TBD</span>}
         </span>
         <div className="shrink-0 min-w-[56px] text-center">
-          {isDone ? (
+          {isDone && !isCancelled ? (
             <span className="font-mono font-bold text-gray-900 text-sm">
               {match.homeScore} – {match.awayScore}
             </span>
@@ -254,14 +256,16 @@ function MatchRow({ match, tournamentId, onScore }: { match: Match; tournamentId
             <span className="text-gray-300 text-xs font-medium">vs</span>
           )}
         </div>
-        <span className={`flex-1 text-left text-sm truncate ${awayWins ? "font-bold text-gray-900" : isDone ? "text-gray-400" : "text-gray-700"}`}>
+        <span className={`flex-1 text-left text-sm truncate ${isCancelled ? "line-through text-gray-400" : awayWins ? "font-bold text-gray-900" : isDone ? "text-gray-400" : "text-gray-700"}`}>
           {match.awayTeam?.name ?? <span className="italic text-gray-300">TBD</span>}
         </span>
       </div>
 
       {/* Status + action */}
       <div className="shrink-0 flex items-center gap-2">
-        {isDone ? (
+        {isCancelled ? (
+          <span className="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded-full font-medium">CANCELLED</span>
+        ) : isDone ? (
           <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
             <CheckCircle className="w-3 h-3" /> FT
           </span>
