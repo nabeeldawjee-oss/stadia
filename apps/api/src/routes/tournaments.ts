@@ -4,6 +4,7 @@ import { prisma } from "@stadia/db";
 import { slugify } from "@stadia/utils";
 import { authenticate } from "../middleware/authenticate";
 import { assertTournamentAccess } from "../engines/auth/permissions";
+import { generateBracketSlots } from "../engines/format/generate-bracket";
 
 const createSchema = z.object({
   name: z.string().min(1).max(200),
@@ -528,6 +529,8 @@ export async function tournamentRoutes(app: FastifyInstance) {
       const newName = name || `${source.name} (copy)`;
       const slug = await uniqueSlug(newName);
 
+      const newBracketIds: string[] = [];
+
       const tournament = await prisma.$transaction(async (tx) => {
         const t = await tx.tournament.create({
           data: {
@@ -564,27 +567,31 @@ export async function tournamentRoutes(app: FastifyInstance) {
               });
               if (includeTeams && group.groupTeams.length) {
                 await tx.groupTeam.createMany({
-                  data: group.groupTeams.map((gt) => ({ groupId: newGroup.id, teamId: gt.teamId })),
+                  data: group.groupTeams.map((gt) => ({ groupId: newGroup.id, teamId: gt.teamId, divisionId: newDiv.id })),
                   skipDuplicates: true,
                 });
               }
             }
 
-            // Clone bracket shells (no matches)
+            // Clone bracket shells (slots generated after transaction)
             for (const bracket of phase.brackets) {
-              await tx.bracket.create({
+              const newBracket = await tx.bracket.create({
                 data: {
                   phaseId: newPhase.id,
                   size: bracket.size,
                   thirdPlaceMatch: bracket.thirdPlaceMatch,
                 },
               });
+              newBracketIds.push(newBracket.id);
             }
           }
         }
 
         return t;
       });
+
+      // Generate slots + matches for cloned brackets (uses top-level prisma, must run outside transaction)
+      await Promise.all(newBracketIds.map((id) => generateBracketSlots(id)));
 
       return reply.code(201).send({ success: true, data: { id: tournament.id, slug: tournament.slug } });
     }
