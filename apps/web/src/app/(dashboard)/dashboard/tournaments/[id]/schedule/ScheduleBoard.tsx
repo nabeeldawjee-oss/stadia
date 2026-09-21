@@ -173,13 +173,14 @@ export default function ScheduleBoard({ tournamentId }: Props) {
                       )}
                       {scheduledHere && !isTarget && (
                         <div className={`m-1 rounded-lg px-2 py-1.5 text-xs leading-tight relative group ${
+                          scheduledHere.match.status === "CANCELLED" ? "bg-red-50 text-red-400 border border-red-200 opacity-60" :
                           scheduledHere.match.status === "COMPLETED" ? "bg-purple-50 text-purple-700 border border-purple-200" :
                           scheduledHere.match.status === "IN_PROGRESS" ? "bg-green-50 text-green-700 border border-green-200" :
                           "bg-blue-50 text-blue-700 border border-blue-200"
                         }`}>
-                          <div className="font-medium truncate">{scheduledHere.match.homeTeam?.name ?? "TBD"}</div>
-                          <div className="text-center opacity-60 text-[10px]">vs</div>
-                          <div className="font-medium truncate">{scheduledHere.match.awayTeam?.name ?? "TBD"}</div>
+                          <div className={`font-medium truncate ${scheduledHere.match.status === "CANCELLED" ? "line-through" : ""}`}>{scheduledHere.match.homeTeam?.name ?? "TBD"}</div>
+                          <div className="text-center opacity-60 text-[10px]">{scheduledHere.match.status === "CANCELLED" ? "CANC" : "vs"}</div>
+                          <div className={`font-medium truncate ${scheduledHere.match.status === "CANCELLED" ? "line-through" : ""}`}>{scheduledHere.match.awayTeam?.name ?? "TBD"}</div>
                           {scheduledHere.match.status === "SCHEDULED" && (
                             <button
                               onClick={() => unschedule(scheduledHere.match.id)}
