@@ -2,7 +2,7 @@
 import { useParams } from "next/navigation";
 import useSWR, { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
-import { Calendar, Clock, MapPin, Grid3x3, Plus, Trash2, MapPinned, Zap, ChevronDown, ChevronUp, ExternalLink, RotateCcw, Pencil, PauseCircle } from "lucide-react";
+import { Calendar, Clock, MapPin, Grid3x3, Plus, Trash2, MapPinned, Zap, ChevronDown, ChevronUp, ExternalLink, RotateCcw, Pencil, PauseCircle, Ban, RotateCw } from "lucide-react";
 import { useState, useMemo } from "react";
 import ScheduleBoard from "./ScheduleBoard";
 import ScoreEntryModal from "@/components/ScoreEntryModal";
@@ -141,6 +141,7 @@ export default function SchedulePage() {
   const [scoringMatch, setScoringMatch] = useState<{ id: string; homeTeam: { id: string; name: string } | null; awayTeam: { id: string; name: string } | null; status: string } | null>(null);
   const [autoResult, setAutoResult] = useState<{ scheduled: number; unscheduled: number } | null>(null);
   const [autoError, setAutoError] = useState<string | null>(null);
+  const [changingStatus, setChangingStatus] = useState<string | null>(null);
 
   const { data: fields, mutate: mutateFields } = useSWR<Field[]>(
     `/api/tournaments/${tournamentId}/fields`,
@@ -191,6 +192,19 @@ export default function SchedulePage() {
   const deleteBreak = async (id: string) => {
     await api.delete(`/api/break-blocks/${id}`);
     await mutateBreaks();
+  };
+
+  const setMatchStatus = async (matchId: string, status: "CANCELLED" | "SCHEDULED") => {
+    if (status === "CANCELLED" && !confirm("Cancel this match? The slot stays in the schedule but the match will be marked cancelled.")) return;
+    setChangingStatus(matchId);
+    try {
+      await api.put(`/api/matches/${matchId}/status`, { status });
+      await mutateScheduled();
+    } catch (err: any) {
+      alert(err.message || "Failed to update match status");
+    } finally {
+      setChangingStatus(null);
+    }
   };
 
   const deleteField = async (fieldId: string) => {
@@ -586,7 +600,7 @@ export default function SchedulePage() {
               </h3>
               <div className="space-y-2">
                 {grouped[day].map((s) => (
-                  <div key={s.id} className="bg-white border border-gray-200 rounded-xl px-5 py-3 flex items-center gap-6">
+                  <div key={s.id} className={`bg-white border rounded-xl px-5 py-3 flex items-center gap-6 ${s.match.status === "CANCELLED" ? "border-red-100 opacity-60" : "border-gray-200"}`}>
                     <div className="flex items-center gap-1.5 text-sm text-gray-500 min-w-[80px]">
                       <Clock className="w-3.5 h-3.5" />
                       {new Date(s.startTime).toLocaleTimeString("en-ZA", { timeZone: "UTC", hour: "2-digit", minute: "2-digit", hour12: false })}
@@ -596,9 +610,9 @@ export default function SchedulePage() {
                       {s.field.name}
                     </div>
                     <div className="flex-1 flex items-center justify-between">
-                      <span className="font-medium text-gray-900 text-sm">{s.match.homeTeam?.name ?? "TBD"}</span>
+                      <span className={`font-medium text-sm ${s.match.status === "CANCELLED" ? "line-through text-gray-400" : "text-gray-900"}`}>{s.match.homeTeam?.name ?? "TBD"}</span>
                       <div className="px-4 text-center">
-                        {s.match.homeScore !== null ? (
+                        {s.match.homeScore !== null && s.match.status !== "CANCELLED" ? (
                           <span className="text-sm font-bold text-gray-900">
                             {s.match.homeScore} — {s.match.awayScore}
                           </span>
@@ -606,27 +620,52 @@ export default function SchedulePage() {
                           <span className="text-xs text-gray-400">vs</span>
                         )}
                       </div>
-                      <span className="font-medium text-gray-900 text-sm text-right">{s.match.awayTeam?.name ?? "TBD"}</span>
+                      <span className={`font-medium text-sm text-right ${s.match.status === "CANCELLED" ? "line-through text-gray-400" : "text-gray-900"}`}>{s.match.awayTeam?.name ?? "TBD"}</span>
                     </div>
                     <div className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                       s.match.status === "COMPLETED" ? "bg-purple-100 text-purple-700" :
                       s.match.status === "IN_PROGRESS" ? "bg-green-100 text-green-700" :
+                      s.match.status === "CANCELLED" ? "bg-red-100 text-red-600" :
                       "bg-gray-100 text-gray-500"
                     }`}>
                       {s.match.status.replace("_", " ")}
                     </div>
-                    {s.match.status !== "CANCELLED" && s.match.homeTeam && s.match.awayTeam && (
+                    {s.match.status === "CANCELLED" ? (
                       <button
-                        onClick={() => setScoringMatch(s.match)}
-                        className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition ${
-                          s.match.status === "COMPLETED"
-                            ? "bg-gray-50 text-gray-400 hover:bg-gray-100"
-                            : "bg-brand-50 text-brand-700 hover:bg-brand-100"
-                        }`}
+                        onClick={() => setMatchStatus(s.match.id, "SCHEDULED")}
+                        disabled={changingStatus === s.match.id}
+                        title="Restore match"
+                        className="flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition bg-gray-50 text-gray-500 hover:bg-green-50 hover:text-green-700 disabled:opacity-40"
                       >
-                        <Pencil className="w-3 h-3" />
-                        {s.match.status === "COMPLETED" ? "Edit" : "Score"}
+                        <RotateCw className="w-3 h-3" />
+                        Restore
                       </button>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        {s.match.homeTeam && s.match.awayTeam && (
+                          <button
+                            onClick={() => setScoringMatch(s.match)}
+                            className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition ${
+                              s.match.status === "COMPLETED"
+                                ? "bg-gray-50 text-gray-400 hover:bg-gray-100"
+                                : "bg-brand-50 text-brand-700 hover:bg-brand-100"
+                            }`}
+                          >
+                            <Pencil className="w-3 h-3" />
+                            {s.match.status === "COMPLETED" ? "Edit" : "Score"}
+                          </button>
+                        )}
+                        {s.match.status !== "COMPLETED" && (
+                          <button
+                            onClick={() => setMatchStatus(s.match.id, "CANCELLED")}
+                            disabled={changingStatus === s.match.id}
+                            title="Cancel match"
+                            className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition disabled:opacity-40"
+                          >
+                            <Ban className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 ))}

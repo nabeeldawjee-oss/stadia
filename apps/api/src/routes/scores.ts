@@ -117,7 +117,7 @@ export async function scoreRoutes(app: FastifyInstance) {
     const match = await prisma.match.findUnique({ where: { id: matchId } });
     if (!match) return reply.code(404).send({ success: false, error: "Not found" });
     await assertTournamentAccess(req.userId!, match.tournamentId, "enter_results");
-    const { status } = z.object({ status: z.enum(["IN_PROGRESS", "COMPLETED", "CANCELLED"]) }).parse(req.body);
+    const { status } = z.object({ status: z.enum(["SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"]) }).parse(req.body);
     const updated = await prisma.match.update({
       where: { id: matchId },
       data: { status, ...(status === "COMPLETED" ? { completedAt: new Date() } : {}) },
