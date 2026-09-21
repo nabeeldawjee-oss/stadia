@@ -45,7 +45,7 @@ export async function registrationRoutes(app: FastifyInstance) {
       create: {
         tournamentId,
         entryFee: body.entryFee,
-        currency: body.currency ?? "USD",
+        currency: body.currency ?? "ZAR",
         maxTeams: body.maxTeams,
         deadline: body.deadline ? new Date(body.deadline) : undefined,
         isOpen: body.isOpen ?? false,
