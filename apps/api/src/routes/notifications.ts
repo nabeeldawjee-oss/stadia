@@ -15,7 +15,7 @@ export async function notificationRoutes(app: FastifyInstance) {
     await prisma.deviceToken.upsert({
       where: { token },
       create: { userId: req.userId!, token, platform },
-      update: { userId: req.userId!, platform, updatedAt: new Date() },
+      update: { userId: req.userId!, platform },
     });
 
     return reply.send({ success: true, data: null });
