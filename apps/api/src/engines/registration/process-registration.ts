@@ -1,7 +1,11 @@
 import { prisma } from "@stadia/db";
 import { stripe } from "../../lib/stripe";
-import { generateScoreToken } from "../referees/generate-token";
 import { sendEmail, registrationConfirmedHtml } from "../../lib/email";
+
+function getFromForm(fd: Record<string, any>, ...keys: string[]): string {
+  for (const k of keys) if (fd[k]) return String(fd[k]);
+  return "";
+}
 
 export async function createRegistrationIntent(tournamentId: string, formData: Record<string, any>) {
   const schema = await prisma.registrationSchema.findUnique({
@@ -28,42 +32,44 @@ export async function createRegistrationIntent(tournamentId: string, formData: R
 
   const selectedAddOnIds: string[] = formData.addOnIds ?? [];
   const selectedAddOns = schema.addOns.filter((a) => selectedAddOnIds.includes(a.id));
-  const total = (schema.entryFee ?? 0) + selectedAddOns.reduce((sum, a) => sum + a.price, 0);
+  const total = (schema.entryFee ?? 0) + selectedAddOns.reduce((s, a) => s + a.price, 0);
+  const expiresAt = new Date(Date.now() + (total === 0 ? 365 * 24 * 60 * 60 * 1000 : 2 * 60 * 60 * 1000));
 
   const registration = await prisma.registration.create({
     data: {
-      tournamentId,
-      teamName: formData.teamName ?? "Unknown",
-      contactName: formData.contactName ?? "",
-      contactEmail: formData.contactEmail ?? "",
-      contactPhone: formData.contactPhone,
+      schema: { connect: { id: schema.id } },
       formData,
-      paymentStatus: total === 0 ? "PAID" : "PENDING",
-      amountDue: total,
-      addOns: selectedAddOnIds.length > 0 ? {
-        create: selectedAddOns.map((a) => ({ addOnId: a.id, price: a.price })),
+      status: total === 0 ? "CONFIRMED" : "PENDING_PAYMENT",
+      totalAmount: total,
+      currency: schema.currency,
+      expiresAt,
+      confirmedAt: total === 0 ? new Date() : undefined,
+      addOns: selectedAddOns.length > 0 ? {
+        create: selectedAddOns.map((a) => ({ addOnId: a.id, qty: 1, unitPrice: a.price })),
       } : undefined,
     },
   });
 
   if (total === 0) {
-    // Free registration — send confirmation immediately
     const tournament = await prisma.tournament.findUnique({
       where: { id: tournamentId },
       select: { name: true, slug: true },
     });
-    if (tournament && registration.contactEmail) {
+    const contactEmail = getFromForm(formData, "email", "contact_email", "contactEmail");
+    const teamName = getFromForm(formData, "team_name", "teamName", "name") || "Your team";
+    const contactName = getFromForm(formData, "contact_name", "contactName", "name") || teamName;
+    if (tournament && contactEmail) {
       const baseUrl = (process.env.WEB_BASE_URL || "https://stadia.app").split(",")[0].trim();
       Promise.resolve().then(() =>
         sendEmail({
-          to: registration.contactEmail,
+          to: contactEmail,
           subject: `Registration confirmed — ${tournament.name}`,
           html: registrationConfirmedHtml({
             tournamentName: tournament.name,
-            teamName: registration.teamName,
-            contactName: registration.contactName || registration.teamName,
+            teamName,
+            contactName,
             entryFee: 0,
-            currency: "USD",
+            currency: schema.currency,
             tournamentUrl: `${baseUrl}/t/${tournament.slug}`,
           }),
         })
@@ -72,15 +78,17 @@ export async function createRegistrationIntent(tournamentId: string, formData: R
     return { registration, clientSecret: null };
   }
 
+  if (!stripe) throw new Error("Stripe is not configured");
+
   const paymentIntent = await stripe.paymentIntents.create({
     amount: Math.round(total * 100),
-    currency: "usd",
+    currency: schema.currency.toLowerCase(),
     metadata: { registrationId: registration.id, tournamentId },
   });
 
   await prisma.registration.update({
     where: { id: registration.id },
-    data: { stripePaymentIntentId: paymentIntent.id },
+    data: { paymentIntentId: paymentIntent.id },
   });
 
   return { registration, clientSecret: paymentIntent.client_secret };
@@ -88,57 +96,58 @@ export async function createRegistrationIntent(tournamentId: string, formData: R
 
 export async function confirmRegistrationPayment(paymentIntentId: string) {
   const registration = await prisma.registration.findFirst({
-    where: { stripePaymentIntentId: paymentIntentId },
+    where: { paymentIntentId },
     include: {
-      tournament: { include: { organizer: { select: { email: true } } } },
+      schema: {
+        include: {
+          tournament: {
+            include: { organizer: { select: { email: true } } },
+          },
+        },
+      },
     },
   });
   if (!registration) throw new Error("Registration not found");
 
   await prisma.registration.update({
     where: { id: registration.id },
-    data: { paymentStatus: "PAID" },
+    data: { status: "CONFIRMED", confirmedAt: new Date() },
   });
 
-  // Auto-create team + generate token
-  const team = await prisma.team.create({
-    data: {
-      tournamentId: registration.tournamentId,
-      name: registration.teamName,
-    },
-  });
-
-  await generateScoreToken("TEAM", team.id, registration.tournamentId);
-
-  // Send confirmation emails (fire-and-forget)
+  const fd = registration.formData as Record<string, any>;
+  const contactEmail = getFromForm(fd, "email", "contact_email", "contactEmail");
+  const teamName = getFromForm(fd, "team_name", "teamName", "name") || "Your team";
+  const contactName = getFromForm(fd, "contact_name", "contactName", "name") || teamName;
+  const { tournament } = registration.schema;
   const baseUrl = (process.env.WEB_BASE_URL || "https://stadia.app").split(",")[0].trim();
-  const tournamentUrl = `${baseUrl}/t/${registration.tournament.slug}`;
-  const { name: tournamentName, organizer } = registration.tournament;
+  const tournamentUrl = `${baseUrl}/t/${tournament.slug}`;
+
   const emailPayload = {
-    tournamentName,
-    teamName: registration.teamName,
-    contactName: registration.contactName || registration.teamName,
-    entryFee: registration.amountDue,
-    currency: "USD",
+    tournamentName: tournament.name,
+    teamName,
+    contactName,
+    entryFee: registration.totalAmount,
+    currency: registration.currency,
     tournamentUrl,
   };
+
   Promise.all([
-    registration.contactEmail
-      ? sendEmail({ to: registration.contactEmail, subject: `Registration confirmed — ${tournamentName}`, html: registrationConfirmedHtml(emailPayload) })
+    contactEmail
+      ? sendEmail({ to: contactEmail, subject: `Registration confirmed — ${tournament.name}`, html: registrationConfirmedHtml(emailPayload) })
       : Promise.resolve(),
-    organizer.email
+    tournament.organizer.email
       ? sendEmail({
-          to: organizer.email,
-          subject: `New registration: ${registration.teamName} — ${tournamentName}`,
+          to: tournament.organizer.email,
+          subject: `New registration: ${teamName} — ${tournament.name}`,
           html: `<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:32px">
             <h1 style="font-size:20px;font-weight:800;color:#111827">New team registered</h1>
-            <p style="color:#374151"><strong>${registration.teamName}</strong> has paid and registered for <strong>${tournamentName}</strong>.</p>
-            <p style="color:#374151">Contact: ${registration.contactName} &lt;${registration.contactEmail}&gt;</p>
-            <a href="${baseUrl}/dashboard/tournaments/${registration.tournamentId}/registration" style="display:inline-block;background:#111827;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;margin:16px 0">View registration →</a>
+            <p style="color:#374151"><strong>${teamName}</strong> has paid and registered for <strong>${tournament.name}</strong>.</p>
+            <p style="color:#374151">Contact: ${contactName}${contactEmail ? ` &lt;${contactEmail}&gt;` : ""}</p>
+            <a href="${baseUrl}/dashboard/tournaments/${registration.schema.tournamentId}/registration" style="display:inline-block;background:#111827;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;margin:16px 0">View registration →</a>
           </div>`,
         })
       : Promise.resolve(),
   ]).catch(() => {});
 
-  return { registration, team };
+  return { registration };
 }

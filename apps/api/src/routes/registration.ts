@@ -195,7 +195,7 @@ export async function registrationRoutes(app: FastifyInstance) {
       data: {
         name: teamName,
         tournamentId: reg.schema.tournamentId,
-        registrations: { connect: { id: reg.id } },
+        registration: { connect: { id: reg.id } },
       },
     });
 
@@ -222,7 +222,7 @@ export async function registrationRoutes(app: FastifyInstance) {
         data: {
           name: teamName,
           tournamentId,
-          registrations: { connect: { id: reg.id } },
+          registration: { connect: { id: reg.id } },
         },
       });
       imported++;
