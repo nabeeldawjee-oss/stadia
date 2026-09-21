@@ -323,7 +323,7 @@ export default function RegistrationPage() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {reg.totalAmount > 0 && (
-                      <span className="text-xs text-gray-400">{reg.currency} {(reg.totalAmount / 100).toFixed(2)}</span>
+                      <span className="text-xs text-gray-400">{reg.currency} {reg.totalAmount.toFixed(2)}</span>
                     )}
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[reg.status] ?? "bg-gray-100 text-gray-600"}`}>
                       {reg.status.replace("_", " ")}
