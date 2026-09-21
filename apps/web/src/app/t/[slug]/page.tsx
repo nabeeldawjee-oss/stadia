@@ -233,7 +233,7 @@ export default function PublicTournamentPage() {
   const allDates = Object.keys(byDate).sort();
   const today = new Date().toISOString().split("T")[0];
 
-  const fixtures = schedule.filter((sm) => sm.match.status !== "COMPLETED" && new Date(sm.startTime).getTime() >= Date.now() - 7200_000);
+  const fixtures = schedule.filter((sm) => sm.match.status !== "COMPLETED" && sm.match.status !== "CANCELLED" && new Date(sm.startTime).getTime() >= Date.now() - 7200_000);
   const scheduledResults = schedule.filter((sm) => sm.match.homeScore != null);
   const scheduledResultIds = new Set(scheduledResults.map((sm) => sm.matchId));
 
@@ -518,13 +518,16 @@ export default function PublicTournamentPage() {
                   <div className="space-y-2">
                     {dayMatches.map((sm) => {
                       const isLive = sm.match.status === "IN_PROGRESS";
+                      const isCancelled = sm.match.status === "CANCELLED";
                       return (
-                        <div key={sm.matchId} className={`bg-white rounded-xl px-4 py-3 flex items-center gap-3 ${isLive ? "border-2" : "border border-gray-200"}`} style={isLive ? { borderColor: primary } : {}}>
+                        <div key={sm.matchId} className={`bg-white rounded-xl px-4 py-3 flex items-center gap-3 ${isCancelled ? "opacity-50 border border-red-200" : isLive ? "border-2" : "border border-gray-200"}`} style={isLive && !isCancelled ? { borderColor: primary } : {}}>
                           <div className="text-xs font-mono text-gray-400 w-10 shrink-0">{fmtTime(sm.startTime)}</div>
                           <div className="text-xs text-gray-300 shrink-0">{sm.field?.name}</div>
                           <div className="flex-1 flex items-center justify-center gap-3 text-sm font-medium">
-                            <span className="text-gray-700">{sm.match.homeTeam?.name ?? "TBD"}</span>
-                            {isLive ? (
+                            <span className={isCancelled ? "line-through text-gray-400" : "text-gray-700"}>{sm.match.homeTeam?.name ?? "TBD"}</span>
+                            {isCancelled ? (
+                              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-600">CANCELLED</span>
+                            ) : isLive ? (
                               <span className="flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: primary }}>
                                 <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
                                 LIVE
@@ -532,7 +535,7 @@ export default function PublicTournamentPage() {
                             ) : (
                               <span className="text-gray-300 text-xs">vs</span>
                             )}
-                            <span className="text-gray-700">{sm.match.awayTeam?.name ?? "TBD"}</span>
+                            <span className={isCancelled ? "line-through text-gray-400" : "text-gray-700"}>{sm.match.awayTeam?.name ?? "TBD"}</span>
                           </div>
                         </div>
                       );
