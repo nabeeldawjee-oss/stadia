@@ -100,7 +100,8 @@ export async function registrationRoutes(app: FastifyInstance) {
       where: { tournamentId: tournament.id },
       include: { fields: { orderBy: { orderIndex: "asc" } }, addOns: true },
     });
-    if (!schema?.isOpen) return reply.code(403).send({ success: false, error: "Registration is closed" });
+    const deadlinePassed = schema?.deadline && new Date(schema.deadline) < new Date();
+    if (!schema?.isOpen || deadlinePassed) return reply.code(403).send({ success: false, error: "Registration is closed" });
     return reply.send({ success: true, data: schema });
   });
 
