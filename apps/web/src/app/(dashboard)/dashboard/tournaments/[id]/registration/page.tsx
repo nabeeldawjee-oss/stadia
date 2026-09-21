@@ -102,6 +102,7 @@ export default function RegistrationPage() {
   };
 
   const [importingTeam, setImportingTeam] = useState<string | null>(null);
+  const [importingAll, setImportingAll] = useState(false);
 
   const importTeam = async (regId: string) => {
     setImportingTeam(regId);
@@ -112,6 +113,21 @@ export default function RegistrationPage() {
       alert(err.message);
     } finally {
       setImportingTeam(null);
+    }
+  };
+
+  const importAllTeams = async () => {
+    const count = (registrations ?? []).filter((r) => r.status === "CONFIRMED" && !r.team).length;
+    if (!confirm(`Import ${count} confirmed registration${count !== 1 ? "s" : ""} as teams? Each will become a team entry in the tournament.`)) return;
+    setImportingAll(true);
+    try {
+      const result = await api.post<{ imported: number }>(`/api/tournaments/${tournamentId}/registrations/import-all-teams`, {});
+      await mutateRegistrations();
+      alert(`Imported ${result.imported} team${result.imported !== 1 ? "s" : ""} successfully.`);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setImportingAll(false);
     }
   };
 
@@ -261,11 +277,26 @@ export default function RegistrationPage() {
       <div className="bg-white border border-gray-200 rounded-2xl p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-gray-900">Submissions ({registrations?.length ?? 0})</h2>
-          {(registrations?.length ?? 0) > 0 && (
-            <button onClick={exportCsv} className="flex items-center gap-1.5 text-xs text-gray-500 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition">
-              <Download className="w-3.5 h-3.5" /> Export CSV
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {(() => {
+              const importable = (registrations ?? []).filter((r) => r.status === "CONFIRMED" && !r.team).length;
+              return importable > 0 ? (
+                <button
+                  onClick={importAllTeams}
+                  disabled={importingAll}
+                  className="flex items-center gap-1.5 text-xs bg-brand-50 text-brand-700 border border-brand-200 px-3 py-1.5 rounded-lg hover:bg-brand-100 transition disabled:opacity-40"
+                >
+                  <UserCheck className="w-3.5 h-3.5" />
+                  {importingAll ? "Importing…" : `Import all ${importable} as teams`}
+                </button>
+              ) : null;
+            })()}
+            {(registrations?.length ?? 0) > 0 && (
+              <button onClick={exportCsv} className="flex items-center gap-1.5 text-xs text-gray-500 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition">
+                <Download className="w-3.5 h-3.5" /> Export CSV
+              </button>
+            )}
+          </div>
         </div>
         {!registrations || registrations.length === 0 ? (
           <p className="text-sm text-gray-400">No registrations yet.</p>

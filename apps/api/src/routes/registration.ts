@@ -194,6 +194,35 @@ export async function registrationRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: { teamId: team.id, teamName: team.name } });
   });
 
+  // Bulk-import all un-linked confirmed registrations as tournament teams
+  app.post("/api/tournaments/:tournamentId/registrations/import-all-teams", { preHandler: authenticate }, async (req, reply) => {
+    const { tournamentId } = req.params as { tournamentId: string };
+    await assertTournamentAccess(req.userId!, tournamentId, "manage_registration");
+
+    const schema = await prisma.registrationSchema.findUnique({ where: { tournamentId } });
+    if (!schema) return reply.send({ success: true, data: { imported: 0 } });
+
+    const regs = await prisma.registration.findMany({
+      where: { schemaId: schema.id, status: "CONFIRMED", teamId: null },
+    });
+
+    let imported = 0;
+    for (const reg of regs) {
+      const fd = reg.formData as Record<string, any>;
+      const teamName = fd?.teamName ?? fd?.team_name ?? fd?.name ?? "Unnamed Team";
+      await prisma.team.create({
+        data: {
+          name: teamName,
+          tournamentId,
+          registrations: { connect: { id: reg.id } },
+        },
+      });
+      imported++;
+    }
+
+    return reply.send({ success: true, data: { imported } });
+  });
+
   // Stripe webhook
   app.post("/api/webhooks/stripe", {
     config: { rawBody: true },
