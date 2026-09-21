@@ -142,6 +142,11 @@ export default function SchedulePage() {
   const [autoResult, setAutoResult] = useState<{ scheduled: number; unscheduled: number } | null>(null);
   const [autoError, setAutoError] = useState<string | null>(null);
   const [changingStatus, setChangingStatus] = useState<string | null>(null);
+  const [editingSlot, setEditingSlot] = useState<string | null>(null);
+  const [slotDate, setSlotDate] = useState("");
+  const [slotTime, setSlotTime] = useState("");
+  const [slotFieldId, setSlotFieldId] = useState("");
+  const [savingSlot, setSavingSlot] = useState(false);
 
   const { data: fields, mutate: mutateFields } = useSWR<Field[]>(
     `/api/tournaments/${tournamentId}/fields`,
@@ -204,6 +209,30 @@ export default function SchedulePage() {
       alert(err.message || "Failed to update match status");
     } finally {
       setChangingStatus(null);
+    }
+  };
+
+  const openSlotEdit = (s: ScheduledMatch) => {
+    const dt = new Date(s.startTime);
+    setSlotDate(s.startTime.slice(0, 10));
+    setSlotTime(dt.toLocaleTimeString("en-ZA", { timeZone: "UTC", hour: "2-digit", minute: "2-digit", hour12: false }));
+    setSlotFieldId(s.field.id);
+    setEditingSlot(s.id);
+  };
+
+  const saveSlot = async (matchId: string, existingStart: string, existingEnd: string) => {
+    setSavingSlot(true);
+    try {
+      const startIso = `${slotDate}T${slotTime}:00.000Z`;
+      const durationMs = new Date(existingEnd).getTime() - new Date(existingStart).getTime();
+      const slotDurationMinutes = Math.round(durationMs / 60000) || 90;
+      await api.put(`/api/matches/${matchId}/slot`, { fieldId: slotFieldId, startTime: startIso, slotDurationMinutes });
+      setEditingSlot(null);
+      await mutateScheduled();
+    } catch (err: any) {
+      alert(err.message || "Failed to reschedule");
+    } finally {
+      setSavingSlot(false);
     }
   };
 
@@ -600,7 +629,8 @@ export default function SchedulePage() {
               </h3>
               <div className="space-y-2">
                 {grouped[day].map((s) => (
-                  <div key={s.id} className={`bg-white border rounded-xl px-5 py-3 flex items-center gap-6 ${s.match.status === "CANCELLED" ? "border-red-100 opacity-60" : "border-gray-200"}`}>
+                  <div key={s.id} className={`bg-white border rounded-xl overflow-hidden ${s.match.status === "CANCELLED" ? "border-red-100 opacity-60" : "border-gray-200"}`}>
+                  <div className="px-5 py-3 flex items-center gap-6">
                     <div className="flex items-center gap-1.5 text-sm text-gray-500 min-w-[80px]">
                       <Clock className="w-3.5 h-3.5" />
                       {new Date(s.startTime).toLocaleTimeString("en-ZA", { timeZone: "UTC", hour: "2-digit", minute: "2-digit", hour12: false })}
@@ -655,6 +685,15 @@ export default function SchedulePage() {
                             {s.match.status === "COMPLETED" ? "Edit" : "Score"}
                           </button>
                         )}
+                        {s.match.status === "SCHEDULED" && (
+                          <button
+                            onClick={() => editingSlot === s.id ? setEditingSlot(null) : openSlotEdit(s)}
+                            title="Reschedule"
+                            className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg text-gray-300 hover:text-brand-600 hover:bg-brand-50 transition"
+                          >
+                            <Calendar className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         {s.match.status !== "COMPLETED" && (
                           <button
                             onClick={() => setMatchStatus(s.match.id, "CANCELLED")}
@@ -667,6 +706,39 @@ export default function SchedulePage() {
                         )}
                       </div>
                     )}
+                  </div>
+                  {/* Inline reschedule form */}
+                  {editingSlot === s.id && (
+                    <div className="border-t border-gray-100 px-5 py-3 bg-gray-50 flex flex-wrap items-end gap-3">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Date</label>
+                        <input type="date" value={slotDate} onChange={(e) => setSlotDate(e.target.value)}
+                          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Time (UTC)</label>
+                        <input type="time" value={slotTime} onChange={(e) => setSlotTime(e.target.value)}
+                          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Field</label>
+                        <select value={slotFieldId} onChange={(e) => setSlotFieldId(e.target.value)}
+                          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                          {(fields ?? []).map((f) => (
+                            <option key={f.id} value={f.id}>{f.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <button
+                        onClick={() => saveSlot(s.match.id, s.startTime, s.endTime)}
+                        disabled={savingSlot || !slotDate || !slotTime || !slotFieldId}
+                        className="bg-brand-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-40 transition"
+                      >
+                        {savingSlot ? "Saving…" : "Save"}
+                      </button>
+                      <button onClick={() => setEditingSlot(null)} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
+                    </div>
+                  )}
                   </div>
                 ))}
               </div>

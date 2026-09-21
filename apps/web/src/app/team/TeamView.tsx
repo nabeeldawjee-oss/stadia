@@ -65,6 +65,7 @@ export default function TeamView() {
     SCHEDULED: "bg-gray-100 text-gray-600",
     IN_PROGRESS: "bg-green-100 text-green-700",
     COMPLETED: "bg-purple-100 text-purple-700",
+    CANCELLED: "bg-red-100 text-red-600",
   };
 
   return (
@@ -194,7 +195,7 @@ export default function TeamView() {
                       )}
                     </div>
                   </div>
-                  {match.status !== "COMPLETED" && match.homeTeam && match.awayTeam && (
+                  {match.status !== "COMPLETED" && match.status !== "CANCELLED" && match.homeTeam && match.awayTeam && (
                     <button
                       onClick={() => setScoring(match)}
                       className="mt-3 w-full bg-brand-600 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-brand-700 transition"
