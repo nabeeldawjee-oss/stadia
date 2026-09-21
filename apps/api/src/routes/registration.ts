@@ -117,8 +117,27 @@ export async function registrationRoutes(app: FastifyInstance) {
     const { slug } = req.params as { slug: string };
     const tournament = await prisma.tournament.findUnique({ where: { slug }, select: { id: true } });
     if (!tournament) return reply.code(404).send({ success: false, error: "Not found" });
+
+    const body = req.body as Record<string, any>;
+
+    // Second step: client-side Stripe payment confirmed — verify/confirm existing registration
+    if (body.paymentIntentId) {
+      const reg = await prisma.registration.findFirst({
+        where: { paymentIntentId: body.paymentIntentId },
+      });
+      if (!reg) return reply.code(404).send({ success: false, error: "Registration not found" });
+      if (reg.status !== "CONFIRMED") {
+        await prisma.registration.update({
+          where: { id: reg.id },
+          data: { status: "CONFIRMED", confirmedAt: new Date() },
+        });
+      }
+      return reply.send({ success: true, data: { registrationId: reg.id } });
+    }
+
+    // First step: create registration (and PaymentIntent if paid)
     try {
-      const result = await createRegistrationIntent(tournament.id, req.body as Record<string, any>);
+      const result = await createRegistrationIntent(tournament.id, body);
       return reply.code(201).send({ success: true, data: result });
     } catch (err: any) {
       return reply.code(400).send({ success: false, error: err.message });
