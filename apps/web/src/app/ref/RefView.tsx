@@ -56,6 +56,7 @@ export default function RefView() {
     SCHEDULED: "bg-gray-100 text-gray-600",
     IN_PROGRESS: "bg-green-100 text-green-700",
     COMPLETED: "bg-purple-100 text-purple-700",
+    CANCELLED: "bg-red-100 text-red-600",
   };
 
   return (
