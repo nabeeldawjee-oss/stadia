@@ -102,6 +102,13 @@ export async function registrationRoutes(app: FastifyInstance) {
     });
     const deadlinePassed = schema?.deadline && new Date(schema.deadline) < new Date();
     if (!schema?.isOpen || deadlinePassed) return reply.code(403).send({ success: false, error: "Registration is closed" });
+
+    if (schema.maxTeams) {
+      const confirmed = await prisma.registration.count({
+        where: { schemaId: schema.id, status: { not: "WITHDRAWN" } },
+      });
+      if (confirmed >= schema.maxTeams) return reply.code(403).send({ success: false, error: "Registration is full" });
+    }
     return reply.send({ success: true, data: schema });
   });
 

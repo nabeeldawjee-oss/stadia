@@ -10,6 +10,14 @@ export async function createRegistrationIntent(tournamentId: string, formData: R
   });
   if (!schema) throw new Error("Registration is not enabled for this tournament");
   if (!schema.isOpen) throw new Error("Registration is closed");
+  if (schema.deadline && new Date(schema.deadline) < new Date()) throw new Error("Registration deadline has passed");
+
+  if (schema.maxTeams) {
+    const confirmed = await prisma.registration.count({
+      where: { schemaId: schema.id, status: { not: "WITHDRAWN" } },
+    });
+    if (confirmed >= schema.maxTeams) throw new Error("This tournament has reached its maximum number of registrations");
+  }
 
   // Validate required fields
   for (const field of schema.fields) {
