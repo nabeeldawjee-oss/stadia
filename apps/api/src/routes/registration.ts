@@ -77,6 +77,46 @@ export async function registrationRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: schema });
   });
 
+  // Add-on CRUD
+  app.post("/api/tournaments/:tournamentId/addons", { preHandler: authenticate }, async (req, reply) => {
+    const { tournamentId } = req.params as { tournamentId: string };
+    await assertTournamentAccess(req.userId!, tournamentId, "manage_registration");
+    const { name, description, price } = z.object({
+      name: z.string().min(1),
+      description: z.string().optional(),
+      price: z.number().int().min(0),
+    }).parse(req.body);
+    let schema = await prisma.registrationSchema.findUnique({ where: { tournamentId } });
+    if (!schema) {
+      schema = await prisma.registrationSchema.create({ data: { tournamentId, isOpen: false } });
+    }
+    const addOn = await prisma.addOn.create({ data: { schemaId: schema.id, name, description, price } });
+    return reply.code(201).send({ success: true, data: addOn });
+  });
+
+  app.put("/api/addons/:id", { preHandler: authenticate }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const addOn = await prisma.addOn.findUnique({ where: { id }, include: { schema: { select: { tournamentId: true } } } });
+    if (!addOn) return reply.code(404).send({ success: false, error: "Not found" });
+    await assertTournamentAccess(req.userId!, addOn.schema.tournamentId, "manage_registration");
+    const { name, description, price } = z.object({
+      name: z.string().min(1).optional(),
+      description: z.string().optional(),
+      price: z.number().int().min(0).optional(),
+    }).parse(req.body);
+    const updated = await prisma.addOn.update({ where: { id }, data: { name, description, price } });
+    return reply.send({ success: true, data: updated });
+  });
+
+  app.delete("/api/addons/:id", { preHandler: authenticate }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const addOn = await prisma.addOn.findUnique({ where: { id }, include: { schema: { select: { tournamentId: true } } } });
+    if (!addOn) return reply.code(404).send({ success: false, error: "Not found" });
+    await assertTournamentAccess(req.userId!, addOn.schema.tournamentId, "manage_registration");
+    await prisma.addOn.delete({ where: { id } });
+    return reply.send({ success: true, data: null });
+  });
+
   // List registrations
   app.get("/api/tournaments/:tournamentId/registrations", { preHandler: authenticate }, async (req, reply) => {
     const { tournamentId } = req.params as { tournamentId: string };

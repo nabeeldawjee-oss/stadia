@@ -6,8 +6,9 @@ import { api } from "@/lib/api";
 import { ExternalLink, Copy, Check, Plus, Trash2, GripVertical, CheckCircle, XCircle, Download, UserCheck } from "lucide-react";
 
 interface FormField { id?: string; fieldKey: string; label: string; type: string; required: boolean; options?: string[]; orderIndex: number; }
+interface AddOn { id: string; name: string; description?: string | null; price: number; }
 interface Registration { id: string; team?: { id: string; name: string } | null; formData: any; status: string; totalAmount: number; currency: string; reservedAt: string; }
-interface RegistrationSchema { id: string; isOpen: boolean; entryFee: number; currency: string; deadline: string | null; maxTeams: number | null; fields: FormField[]; }
+interface RegistrationSchema { id: string; isOpen: boolean; entryFee: number; currency: string; deadline: string | null; maxTeams: number | null; fields: FormField[]; addOns: AddOn[]; }
 
 const FIELD_TYPES = ["TEXT", "NUMBER", "EMAIL", "SELECT", "CHECKBOX"] as const;
 const STATUS_COLORS: Record<string, string> = {
@@ -31,6 +32,10 @@ export default function RegistrationPage() {
   const [fields, setFields] = useState<FormField[]>([]);
 
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+
+  const [showAddOn, setShowAddOn] = useState(false);
+  const [addOnForm, setAddOnForm] = useState({ name: "", description: "", price: "" });
+  const [savingAddOn, setSavingAddOn] = useState(false);
 
   const { data: tournament } = useSWR(`/api/tournaments/${tournamentId}`, () => api.get(`/api/tournaments/${tournamentId}`));
   const { data: schema, mutate: mutateSchema } = useSWR<RegistrationSchema>(`/api/tournaments/${tournamentId}/registration`, () => api.get(`/api/tournaments/${tournamentId}/registration`));
@@ -153,6 +158,31 @@ export default function RegistrationPage() {
     URL.revokeObjectURL(url);
   };
 
+  const createAddOn = async () => {
+    if (!addOnForm.name.trim()) return;
+    setSavingAddOn(true);
+    try {
+      await api.post(`/api/tournaments/${tournamentId}/addons`, {
+        name: addOnForm.name.trim(),
+        description: addOnForm.description || undefined,
+        price: parseInt(addOnForm.price, 10) || 0,
+      });
+      setAddOnForm({ name: "", description: "", price: "" });
+      setShowAddOn(false);
+      await mutateSchema();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSavingAddOn(false);
+    }
+  };
+
+  const deleteAddOn = async (id: string) => {
+    if (!confirm("Remove this add-on?")) return;
+    await api.delete(`/api/addons/${id}`);
+    await mutateSchema();
+  };
+
   const inputCls = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
 
   return (
@@ -256,6 +286,67 @@ export default function RegistrationPage() {
           </button>
         )}
       </div>
+
+      {/* Add-ons */}
+      {schema && (
+        <div className="bg-white border border-gray-200 rounded-2xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="font-semibold text-gray-900">Add-ons</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Optional extras teams can purchase when registering</p>
+            </div>
+            <button onClick={() => setShowAddOn(true)} className="flex items-center gap-1.5 text-xs bg-brand-600 text-white px-3 py-1.5 rounded-lg hover:bg-brand-700 transition">
+              <Plus className="w-3.5 h-3.5" /> Add add-on
+            </button>
+          </div>
+
+          {showAddOn && (
+            <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Name</label>
+                  <input value={addOnForm.name} onChange={(e) => setAddOnForm((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. Kit bag" className={`${inputCls} w-full`} />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Price ({schema.currency})</label>
+                  <input type="number" min="0" value={addOnForm.price} onChange={(e) => setAddOnForm((p) => ({ ...p, price: e.target.value }))} placeholder="0" className={`${inputCls} w-full`} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Description (optional)</label>
+                <input value={addOnForm.description} onChange={(e) => setAddOnForm((p) => ({ ...p, description: e.target.value }))} placeholder="Brief description" className={`${inputCls} w-full`} />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={createAddOn} disabled={savingAddOn || !addOnForm.name.trim()} className="bg-brand-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40">
+                  {savingAddOn ? "Saving…" : "Add"}
+                </button>
+                <button onClick={() => setShowAddOn(false)} className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-medium">Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {(schema.addOns ?? []).length === 0 ? (
+            <p className="text-sm text-gray-400">No add-ons configured.</p>
+          ) : (
+            <div className="space-y-2">
+              {(schema.addOns ?? []).map((addOn) => (
+                <div key={addOn.id} className="flex items-center justify-between border border-gray-100 rounded-lg px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{addOn.name}</p>
+                    {addOn.description && <p className="text-xs text-gray-400">{addOn.description}</p>}
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-sm font-medium text-gray-700">{schema.currency} {addOn.price}</span>
+                    <button onClick={() => deleteAddOn(addOn.id)} className="text-gray-300 hover:text-red-500 transition">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Registration link */}
       {isOpen && tournament && (
