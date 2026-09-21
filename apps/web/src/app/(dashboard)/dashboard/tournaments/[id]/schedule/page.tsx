@@ -148,6 +148,11 @@ export default function SchedulePage() {
   const [slotFieldId, setSlotFieldId] = useState("");
   const [savingSlot, setSavingSlot] = useState(false);
 
+  const { data: tournament } = useSWR<{ slug: string }>(
+    `/api/tournaments/${tournamentId}`,
+    () => api.get(`/api/tournaments/${tournamentId}`)
+  );
+
   const { data: fields, mutate: mutateFields } = useSWR<Field[]>(
     `/api/tournaments/${tournamentId}/fields`,
     () => api.get(`/api/tournaments/${tournamentId}/fields`)
@@ -570,7 +575,7 @@ export default function SchedulePage() {
             {fields.map((f) => (
               <a
                 key={f.id}
-                href={`/display/${tournamentId}/field/${f.id}`}
+                href={`/display/${tournament?.slug ?? tournamentId}/field/${f.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-brand-600 hover:bg-brand-50 hover:border-brand-200 transition"
